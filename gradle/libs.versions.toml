@@ -42,6 +42,9 @@ credentials = "1.5.0"
 googleid = "1.1.1"
 zxingCore = "3.5.3"
 wireguardTunnel = "1.0.20230706"
+amneziawgAndroid = "2.3.7"
+libboxAndroid = "2.1.4"
+vpnprotocolsOpenvpn = "3.0.4"
 desugarJdkLibs = "2.1.4"
 orgJson = "20240303"
 
@@ -100,6 +103,9 @@ androidx-credentials-play-services = { group = "androidx.credentials", name = "c
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
 wireguard-tunnel = { group = "com.wireguard.android", name = "tunnel", version.ref = "wireguardTunnel" }
+amneziawg-android = { group = "com.zaneschepke", name = "amneziawg-android", version.ref = "amneziawgAndroid" }
+libbox-android = { group = "net.clever-vpn", name = "libbox-android", version.ref = "libboxAndroid" }
+vpnprotocols-openvpn = { group = "io.github.tim06", name = "vpnprotocols-openvpn", version.ref = "vpnprotocolsOpenvpn" }
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 

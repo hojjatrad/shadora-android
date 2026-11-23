@@ -108,6 +108,19 @@ object XrayNativeBridge {
         }
     }
 
+    /**
+     * Sums incremental bytes across both `proxy` and `direct` outbounds for accurate speed telemetry.
+     */
+    fun queryAllOutboundTrafficStats(): Pair<Long, Long>? {
+        if (activeController == null) return null
+        val proxyDown = queryStats("proxy", "downlink")
+        val proxyUp = queryStats("proxy", "uplink")
+        if (proxyDown < 0L || proxyUp < 0L) return null
+        val directDown = queryStats("direct", "downlink").coerceAtLeast(0L)
+        val directUp = queryStats("direct", "uplink").coerceAtLeast(0L)
+        return (proxyDown + directDown) to (proxyUp + directUp)
+    }
+
     fun isRunning(): Boolean = activeController != null
 
     fun stop() {

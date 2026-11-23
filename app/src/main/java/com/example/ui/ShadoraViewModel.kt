@@ -9,7 +9,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.ShadoraApplication
 import com.example.configmanager.BatchImportReport
 import com.example.configmanager.QrCodeHelper
+import com.example.configmanager.SingBoxJsonCompiler
 import com.example.configmanager.XrayJsonCompiler
+import com.example.vpnservice.CloakNativeBridge
+import com.example.vpnservice.LightwayNativeBridge
+import com.example.vpnservice.MieruNativeBridge
+import com.example.vpnservice.SingBoxNativeBridge
 import com.example.core.model.AppLanguage
 import com.example.core.model.AppThemeMode
 import com.example.core.model.ConnectionState
@@ -499,10 +504,24 @@ class ShadoraViewModel(application: Application) : AndroidViewModel(application)
             val engineCfg = repository.getEngineSettings(proto.engineId)
 
             val compiled = withContext(Dispatchers.Default) {
-                if (parsed != null && proto.engineId == "xray") {
-                    runCatching { XrayJsonCompiler.compile(parsed, appCfg, engineCfg) }.getOrDefault(raw)
-                } else {
-                    raw
+                when {
+                    parsed != null && proto.engineId == "xray" -> runCatching {
+                        if (SingBoxNativeBridge.isAvailable() || proto in setOf(
+                                VpnProtocol.TUIC, VpnProtocol.HYSTERIA2, VpnProtocol.ANYTLS, VpnProtocol.SHADOWTLS
+                            )
+                        ) {
+                            SingBoxJsonCompiler.compile(parsed, appCfg, engineCfg)
+                        } else {
+                            XrayJsonCompiler.compile(parsed, appCfg, engineCfg)
+                        }
+                    }.getOrDefault(raw)
+                    parsed != null && proto == VpnProtocol.MIERU ->
+                        runCatching { MieruNativeBridge.compileClientJson(parsed) }.getOrDefault(raw)
+                    parsed != null && proto == VpnProtocol.CLOAK ->
+                        runCatching { CloakNativeBridge.compileClientJson(parsed) }.getOrDefault(raw)
+                    parsed != null && proto == VpnProtocol.LIGHTWAY ->
+                        runCatching { LightwayNativeBridge.compileProfileJson(parsed) }.getOrDefault(raw)
+                    else -> raw
                 }
             }
             val qr = withContext(Dispatchers.Default) {

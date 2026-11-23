@@ -2,6 +2,7 @@ package com.example
 
 import com.example.configmanager.ConfigParser
 import com.example.configmanager.ParseOutcome
+import com.example.configmanager.SingBoxJsonCompiler
 import com.example.configmanager.XrayJsonCompiler
 import com.example.data.backup.ShadoraBackupCodec
 import com.example.data.local.AppSettingsEntity
@@ -12,6 +13,9 @@ import com.example.panelapi.StandaloneOfflinePanelClient
 import com.example.security.AppLockManager
 import com.example.security.SafeLogger
 import com.example.subscriptionmanager.SubscriptionAutoRefreshScheduler
+import com.example.vpnservice.CloakNativeBridge
+import com.example.vpnservice.LightwayNativeBridge
+import com.example.vpnservice.MieruNativeBridge
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -206,6 +210,128 @@ class ShadoraProFeaturesUnitTest {
         assertFalse(AppLockManager.verifyPin("0000", hash1))
         assertFalse(AppLockManager.verifyPin("", hash1))
         assertFalse(AppLockManager.verifyPin("7391", "malformed_hash_without_colon"))
+    }
+
+    @Test
+    fun `SingBoxJsonCompiler compiles VLESS Reality Vision with Smart Routing and anti-loop DNS`() {
+        val uri = "vless://11111111-2222-3333-4444-555555555555@203.0.113.10:443" +
+            "?security=reality&flow=xtls-rprx-vision&sni=www.cloudflare.com&fp=chrome" +
+            "&pbk=PublicKeySample123456789012345678901234567890&sid=abcd1234&type=tcp#DE-Vision"
+        val parsed = (ConfigParser().parseBatch(uri).first() as ParseOutcome.Success).config
+        val settings = AppSettingsEntity(
+            primaryDns = "1.1.1.1",
+            secondaryDns = "8.8.8.8",
+            ipv6Enabled = false,
+            bypassIranDomains = true,
+            bypassLanCidrs = true,
+            customDirectDomainsCsv = "mybank.ir, full:intranet.local",
+            customBlockDomainsCsv = "ads.example.com"
+        )
+
+        val compiled = SingBoxJsonCompiler.compile(parsed, settings, EngineSettingsEntity(engineId = "xray", mtu = 1420))
+        val root = JSONObject(compiled)
+
+        // Verify TUN inbound
+        val tun = root.getJSONArray("inbounds").getJSONObject(0)
+        assertEquals("tun", tun.getString("type"))
+        assertEquals(1420, tun.getInt("mtu"))
+        assertEquals("gvisor", tun.getString("stack"))
+        assertTrue(tun.has("route_exclude_address"))
+
+        // Verify proxy outbound (VLESS + Reality + Vision + uTLS)
+        val proxy = root.getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("vless", proxy.getString("type"))
+        assertEquals("xtls-rprx-vision", proxy.getString("flow"))
+        val tls = proxy.getJSONObject("tls")
+        assertTrue(tls.getBoolean("enabled"))
+        assertEquals("www.cloudflare.com", tls.getString("server_name"))
+        assertEquals("chrome", tls.getJSONObject("utls").getString("fingerprint"))
+        assertEquals("PublicKeySample123456789012345678901234567890", tls.getJSONObject("reality").getString("public_key"))
+
+        // Verify anti-loop DNS + Smart Routing rules
+        val route = root.getJSONObject("route")
+        assertEquals("local-dns", route.getString("default_domain_resolver"))
+        assertEquals("proxy", route.getString("final"))
+        val rulesJson = route.getJSONArray("rules").toString()
+        assertTrue(rulesJson.contains("\"action\":\"hijack-dns\""))
+        assertTrue(rulesJson.contains("\"ip_is_private\":true"))
+        assertTrue(rulesJson.contains("shaparak.ir"))
+        assertTrue(rulesJson.contains("mybank.ir"))
+        assertTrue(rulesJson.contains("ads.example.com"))
+    }
+
+    @Test
+    fun `SingBoxJsonCompiler compiles TUIC v5, VMess WS, Trojan gRPC, and Shadowsocks cleanly`() {
+        val parser = ConfigParser()
+        val settings = AppSettingsEntity()
+        val engine = EngineSettingsEntity(engineId = "xray")
+
+        val tuicUri = "tuic://11111111-2222-3333-4444-555555555555:MyTuicPass@tuic.example.com:8443" +
+            "?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=tuic.example.com#TUIC"
+        val tuicParsed = (parser.parseBatch(tuicUri).first() as ParseOutcome.Success).config
+        val tuicOut = JSONObject(SingBoxJsonCompiler.compile(tuicParsed, settings, engine))
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("tuic", tuicOut.getString("type"))
+        assertEquals("bbr", tuicOut.getString("congestion_control"))
+        assertEquals("h3", tuicOut.getJSONObject("tls").getJSONArray("alpn").getString(0))
+
+        val trojanUri = "trojan://SuperPass@tr.example.com:443?security=tls&sni=tr.example.com&type=grpc&serviceName=shadora#TR"
+        val trojanParsed = (parser.parseBatch(trojanUri).first() as ParseOutcome.Success).config
+        val trojanOut = JSONObject(SingBoxJsonCompiler.compile(trojanParsed, settings, engine))
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("trojan", trojanOut.getString("type"))
+        assertEquals("grpc", trojanOut.getJSONObject("transport").getString("type"))
+        assertEquals("shadora", trojanOut.getJSONObject("transport").getString("service_name"))
+
+        val ssUser = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("aes-256-gcm:Pass123".toByteArray())
+        val ssParsed = (parser.parseBatch("ss://$ssUser@sg.example.com:8388#SG").first() as ParseOutcome.Success).config
+        val ssOut = JSONObject(SingBoxJsonCompiler.compile(ssParsed, settings, engine))
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("shadowsocks", ssOut.getString("type"))
+        assertEquals("aes-256-gcm", ssOut.getString("method"))
+
+        // Hysteria2 + Salamander obfs
+        val hy2Parsed = (parser.parseBatch(
+            "hy2://Hy2Pass@hy2.example.com:8443?sni=hy2.example.com&obfs=salamander&obfs-password=SalPass&upmbps=40&downmbps=150#Hy2"
+        ).first() as ParseOutcome.Success).config
+        val hy2Out = JSONObject(SingBoxJsonCompiler.compile(hy2Parsed, settings, engine))
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("hysteria2", hy2Out.getString("type"))
+        assertEquals("salamander", hy2Out.getJSONObject("obfs").getString("type"))
+        assertEquals(40, hy2Out.getInt("up_mbps"))
+
+        // AnyTLS
+        val anyParsed = (parser.parseBatch("anytls://AnyPass@any.example.com:443?sni=any.example.com&fp=chrome#Any").first() as ParseOutcome.Success).config
+        val anyOut = JSONObject(SingBoxJsonCompiler.compile(anyParsed, settings, engine))
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("anytls", anyOut.getString("type"))
+        assertEquals("AnyPass", anyOut.getString("password"))
+
+        // ShadowTLS v3 (2-outbound detour chain)
+        val stParsed = (parser.parseBatch(
+            "shadowtls://StSecret@st.example.com:443?version=3&sni=www.cloudflare.com&ss_method=aes-256-gcm&ss_password=SsSecret#ST"
+        ).first() as ParseOutcome.Success).config
+        val stOutbounds = JSONObject(SingBoxJsonCompiler.compile(stParsed, settings, engine)).getJSONArray("outbounds")
+        assertEquals("shadowsocks", stOutbounds.getJSONObject(0).getString("type"))
+        assertEquals("shadowtls-out", stOutbounds.getJSONObject(0).getString("detour"))
+        assertEquals("shadowtls", stOutbounds.getJSONObject(1).getString("type"))
+        assertEquals(3, stOutbounds.getJSONObject(1).getInt("version"))
+
+        // Mieru, Cloak, Lightway compilers + TUN chain
+        val mieruParsed = (parser.parseBatch("mieru://bob:Pass123@mieru.example.com:8443?transport=UDP#M").first() as ParseOutcome.Success).config
+        val mieruJson = JSONObject(MieruNativeBridge.compileClientJson(mieruParsed, 10891))
+        assertEquals(10891, mieruJson.getInt("socks5Port"))
+        val socksChain = JSONObject(SingBoxJsonCompiler.compileLocalSocksChain("127.0.0.1", 10891, settings, engine))
+        assertEquals("socks", socksChain.getJSONArray("outbounds").getJSONObject(0).getString("type"))
+
+        val cloakParsed = (parser.parseBatch("cloak://UidVal@cloak.example.com:443?PublicKey=PkVal&ServerName=www.bing.com#C").first() as ParseOutcome.Success).config
+        val cloakJson = JSONObject(CloakNativeBridge.compileClientJson(cloakParsed))
+        assertEquals("UidVal", cloakJson.getString("UID"))
+        assertEquals("PkVal", cloakJson.getString("PublicKey"))
+
+        val lwParsed = (parser.parseBatch("lightway://lw.example.com:443?protocol=udp&cipher=aes#L").first() as ParseOutcome.Success).config
+        val lwJson = JSONObject(LightwayNativeBridge.compileProfileJson(lwParsed))
+        assertEquals("lw.example.com", lwJson.getString("host"))
     }
 }
 

@@ -21,17 +21,20 @@ enum class VpnProtocol(
     val defaultTier: EngineSupportTier,
     val uriSchemes: List<String>
 ) {
-    VLESS("VLESS", "xray", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("vless")),
-    VMESS("VMess", "xray", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("vmess")),
-    TROJAN("Trojan", "xray", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("trojan")),
-    SHADOWSOCKS("Shadowsocks", "xray", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("ss")),
+    VLESS("VLESS", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("vless")),
+    VMESS("VMess", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("vmess")),
+    TROJAN("Trojan", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("trojan")),
+    SHADOWSOCKS("Shadowsocks", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("ss")),
+    HYSTERIA2("Hysteria2", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("hy2", "hysteria2")),
+    ANYTLS("AnyTLS", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("anytls")),
+    SHADOWTLS("ShadowTLS", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("shadowtls")),
+    TUIC("TUIC", "xray", EngineSupportTier.NATIVE_BUNDLED, listOf("tuic")),
     WIREGUARD("WireGuard", "wireguard", EngineSupportTier.NATIVE_BUNDLED, listOf("wg", "wireguard")),
-    AMNEZIA_WG("AmneziaWG", "amneziawg", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("awg", "amneziawg")),
-    OPENVPN("OpenVPN", "openvpn", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("ovpn", "openvpn")),
-    TUIC("TUIC", "tuic", EngineSupportTier.UNSUPPORTED_NO_ENGINE, listOf("tuic")),
-    MIERU("Mieru", "mieru", EngineSupportTier.UNSUPPORTED_NO_ENGINE, listOf("mieru")),
-    LIGHTWAY("Lightway", "lightway", EngineSupportTier.UNSUPPORTED_NO_ENGINE, listOf("lightway")),
-    CLOAK("Cloak", "cloak", EngineSupportTier.UNSUPPORTED_NO_ENGINE, listOf("cloak"));
+    AMNEZIA_WG("AmneziaWG", "amneziawg", EngineSupportTier.NATIVE_BUNDLED, listOf("awg", "amneziawg")),
+    OPENVPN("OpenVPN", "openvpn", EngineSupportTier.NATIVE_BUNDLED, listOf("ovpn", "openvpn")),
+    MIERU("Mieru", "mieru", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("mieru")),
+    CLOAK("Cloak", "cloak", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("cloak")),
+    LIGHTWAY("Lightway", "lightway", EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE, listOf("lightway"));
 
     companion object {
         fun fromName(name: String): VpnProtocol =

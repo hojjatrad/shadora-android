@@ -194,8 +194,53 @@ class ConfigParserAndCompilerTest {
         ).first()
         assertTrue(missingRealityKey is ParseOutcome.Failure)
 
-        val tuic = parser.parseBatch("tuic://uuid:pass@tuic.example.com:443#TUIC").first() as ParseOutcome.Failure
-        assertEquals(VpnProtocol.TUIC, tuic.detectedProtocol)
+        val tuic = parser.parseBatch(
+            "tuic://11111111-2222-3333-4444-555555555555:SecretPass@tuic.example.com:443?congestion_control=bbr&alpn=h3&sni=tuic.example.com#TUIC%20Node"
+        ).first() as ParseOutcome.Success
+        assertEquals(VpnProtocol.TUIC, tuic.config.protocol)
+        assertEquals("tuic.example.com", tuic.config.host)
+        assertEquals(443, tuic.config.port)
+        assertEquals("SecretPass", tuic.config.credentialsMap["password"])
+
+        val hy2 = parser.parseBatch(
+            "hy2://MyHy2Pass@hy2.example.com:8443?sni=hy2.example.com&obfs=salamander&obfs-password=ObfsKey99&upmbps=50&downmbps=200#DE%20Hy2"
+        ).first() as ParseOutcome.Success
+        assertEquals(VpnProtocol.HYSTERIA2, hy2.config.protocol)
+        assertEquals("ObfsKey99", hy2.config.credentialsMap["obfsPassword"])
+
+        val anyTls = parser.parseBatch(
+            "anytls://AnySecret@any.example.com:443?sni=any.example.com&fp=chrome#AnyTLS%20Node"
+        ).first() as ParseOutcome.Success
+        assertEquals(VpnProtocol.ANYTLS, anyTls.config.protocol)
+        assertEquals("AnySecret", anyTls.config.credentialsMap["password"])
+
+        val shadowTls = parser.parseBatch(
+            "shadowtls://StPass123@st.example.com:443?version=3&sni=www.microsoft.com&ss_method=2022-blake3-aes-128-gcm&ss_password=SsKey#ShadowTLS"
+        ).first() as ParseOutcome.Success
+        assertEquals(VpnProtocol.SHADOWTLS, shadowTls.config.protocol)
+        assertEquals("www.microsoft.com", shadowTls.config.parameters["sni"])
+
+        val mieru = parser.parseBatch(
+            "mieru://alice:StrongPass@mieru.example.com:8443?transport=TCP&multiplexing=MULTIPLEXING_HIGH#Mieru%20JP"
+        ).first() as ParseOutcome.Success
+        assertEquals(VpnProtocol.MIERU, mieru.config.protocol)
+        assertEquals("alice", mieru.config.credentialsMap["username"])
+
+        val cloak = parser.parseBatch(
+            "cloak://UID123456@cloak.example.com:443?PublicKey=PubKeyXYZ&ServerName=www.cloudflare.com&ProxyMethod=shadowsocks&ss_password=SsPass#Cloak%20DE"
+        ).first() as ParseOutcome.Success
+        assertEquals(VpnProtocol.CLOAK, cloak.config.protocol)
+        assertEquals("UID123456", cloak.config.credentialsMap["uid"])
+        assertEquals("PubKeyXYZ", cloak.config.credentialsMap["publicKey"])
+
+        val lightway = parser.parseBatch(
+            "lightway://lw.example.com:443?protocol=udp&cipher=chacha20#Lightway%20UK"
+        ).first() as ParseOutcome.Success
+        assertEquals(VpnProtocol.LIGHTWAY, lightway.config.protocol)
+        assertEquals("udp", lightway.config.transport)
+
+        val unknownScheme = parser.parseBatch("unknownproto://foo@bar:443#Unknown").first()
+        assertTrue(unknownScheme is ParseOutcome.Failure)
     }
 
     @Test

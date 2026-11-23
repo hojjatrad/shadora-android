@@ -15,12 +15,16 @@ import java.util.Base64
  * - VLESS (`vless://`)
  * - VMess (`vmess://` Base64 JSON)
  * - Trojan (`trojan://`)
- * - Shadowsocks (`ss://` SIP002 & legacy)
+ * - Shadowsocks (`ss://` SIP002 & legacy, including `shadow-tls` and `ck-client` plugins)
+ * - Hysteria2 (`hy2://`, `hysteria2://`)
+ * - AnyTLS (`anytls://`)
+ * - ShadowTLS (`shadowtls://`)
+ * - TUIC v5 (`tuic://`)
  * - WireGuard & AmneziaWG (INI `.conf` including `Jc`/`Jmin`/`Jmax`/`S1`/`S2`/`H1..H4`)
  * - OpenVPN (`.ovpn` with security blocking of script/shell directives)
+ * - Mieru (`mieru://`), Cloak (`cloak://`), Lightway (`lightway://`)
  * - Raw Xray JSON (`outbounds[]`)
  * - Multi-line and Base64-encoded subscription payloads
- * - Recognition of unsupported protocols (TUIC, Mieru, Lightway, Cloak)
  */
 class ConfigParser {
 
@@ -73,6 +77,9 @@ class ConfigParser {
             firstLine.startsWith("vmess://") -> VpnProtocol.VMESS
             firstLine.startsWith("trojan://") -> VpnProtocol.TROJAN
             firstLine.startsWith("ss://") -> VpnProtocol.SHADOWSOCKS
+            firstLine.startsWith("hy2://") || firstLine.startsWith("hysteria2://") -> VpnProtocol.HYSTERIA2
+            firstLine.startsWith("anytls://") -> VpnProtocol.ANYTLS
+            firstLine.startsWith("shadowtls://") -> VpnProtocol.SHADOWTLS
             firstLine.startsWith("tuic://") -> VpnProtocol.TUIC
             firstLine.startsWith("mieru://") -> VpnProtocol.MIERU
             firstLine.startsWith("lightway://") -> VpnProtocol.LIGHTWAY
@@ -122,7 +129,10 @@ class ConfigParser {
             .filter { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("//") }
             .toList()
 
-        val knownSchemePattern = Regex("^(vless|vmess|trojan|ss|tuic|mieru|lightway|cloak)://", RegexOption.IGNORE_CASE)
+        val knownSchemePattern = Regex(
+            "^(vless|vmess|trojan|ss|hy2|hysteria2|anytls|shadowtls|tuic|mieru|lightway|cloak)://",
+            RegexOption.IGNORE_CASE
+        )
         if (directLines.any { knownSchemePattern.containsMatchIn(it) }) {
             return directLines.filter { knownSchemePattern.containsMatchIn(it) }
         }
@@ -148,10 +158,13 @@ class ConfigParser {
             lower.startsWith("vmess://") -> parseVmess(line)
             lower.startsWith("trojan://") -> parseTrojan(line)
             lower.startsWith("ss://") -> parseShadowsocks(line)
-            lower.startsWith("tuic://") -> parseRecognizedUnsupported(line, VpnProtocol.TUIC)
-            lower.startsWith("mieru://") -> parseRecognizedUnsupported(line, VpnProtocol.MIERU)
-            lower.startsWith("lightway://") -> parseRecognizedUnsupported(line, VpnProtocol.LIGHTWAY)
-            lower.startsWith("cloak://") -> parseRecognizedUnsupported(line, VpnProtocol.CLOAK)
+            lower.startsWith("hy2://") || lower.startsWith("hysteria2://") -> parseHysteria2(line)
+            lower.startsWith("anytls://") -> parseAnyTls(line)
+            lower.startsWith("shadowtls://") -> parseShadowTls(line)
+            lower.startsWith("tuic://") -> parseTuic(line)
+            lower.startsWith("mieru://") -> parseMieru(line)
+            lower.startsWith("cloak://") -> parseCloak(line)
+            lower.startsWith("lightway://") -> parseLightway(line)
             else -> ParseOutcome.Failure(
                 rawSnippet = line.take(40),
                 reasonFa = "فرمت کانفیگ ناشناخته یا نامعتبر است.",
@@ -417,7 +430,70 @@ class ConfigParser {
 
         val finalRemark = remark.ifBlank { "Shadowsocks $host" }
         val (countryCode, countryName) = CountryDetector.detect(finalRemark, host)
-        val fingerprint = sha256("ss|$method|$password|$host|$port|${query["plugin"].orEmpty()}")
+        val pluginRaw = query["plugin"].orEmpty()
+        val pluginName = pluginRaw.substringBefore(';').lowercase()
+        val pluginOpts = parseSemicolonPluginOptions(pluginRaw.substringAfter(';', ""))
+
+        // Promote Shadowsocks + shadow-tls plugin to native ShadowTLS v3 (libbox.so)
+        if (pluginName == "shadow-tls" || pluginName == "shadowtls") {
+            val stPassword = pluginOpts["password"].orEmpty().ifBlank { password }
+            val stSni = pluginOpts["host"].orEmpty().ifBlank { pluginOpts["sni"].orEmpty() }.ifBlank { host }
+            val stVersion = pluginOpts["version"]?.ifBlank { "3" } ?: "3"
+            val fp = sha256("shadowtls|$stVersion|$stPassword|$stSni|$method|$password|$host|$port")
+            return ParseOutcome.Success(
+                ParsedVpnConfig(
+                    protocol = VpnProtocol.SHADOWTLS,
+                    format = ConfigFormat.URI_LINK,
+                    displayName = finalRemark,
+                    host = host,
+                    port = port,
+                    transport = "tls-v$stVersion",
+                    security = "shadowtls",
+                    countryCode = countryCode,
+                    countryName = countryName,
+                    rawPayload = rawUri,
+                    credentialsMap = mapOf(
+                        "password" to stPassword,
+                        "ss_method" to method,
+                        "ss_password" to password
+                    ),
+                    parameters = query + pluginOpts + mapOf("sni" to stSni, "version" to stVersion),
+                    fingerprint = fp
+                )
+            )
+        }
+
+        // Promote Shadowsocks + ck-client plugin to Cloak Pluggable Transport
+        if (pluginName == "ck-client" || pluginName == "cloak") {
+            val uid = pluginOpts["UID"].orEmpty().ifBlank { pluginOpts["uid"].orEmpty() }
+            val pubKey = pluginOpts["PublicKey"].orEmpty().ifBlank { pluginOpts["publicKey"].orEmpty() }
+            val sni = pluginOpts["ServerName"].orEmpty().ifBlank { host }
+            val fp = sha256("cloak|$uid|$pubKey|$sni|$method|$password|$host|$port")
+            return ParseOutcome.Success(
+                ParsedVpnConfig(
+                    protocol = VpnProtocol.CLOAK,
+                    format = ConfigFormat.URI_LINK,
+                    displayName = finalRemark,
+                    host = host,
+                    port = port,
+                    transport = pluginOpts["Transport"]?.lowercase()?.ifBlank { "direct" } ?: "direct",
+                    security = "cloak",
+                    countryCode = countryCode,
+                    countryName = countryName,
+                    rawPayload = rawUri,
+                    credentialsMap = mapOf(
+                        "uid" to uid,
+                        "publicKey" to pubKey,
+                        "ss_method" to method,
+                        "ss_password" to password
+                    ),
+                    parameters = query + pluginOpts + mapOf("ServerName" to sni, "ProxyMethod" to "shadowsocks"),
+                    fingerprint = fp
+                )
+            )
+        }
+
+        val fingerprint = sha256("ss|$method|$password|$host|$port|$pluginRaw")
 
         return ParseOutcome.Success(
             ParsedVpnConfig(
@@ -426,12 +502,331 @@ class ConfigParser {
                 displayName = finalRemark,
                 host = host,
                 port = port,
-                transport = if (query["plugin"].isNullOrBlank()) "tcp" else "plugin",
+                transport = if (pluginRaw.isBlank()) "tcp" else "plugin",
                 security = method,
                 countryCode = countryCode,
                 countryName = countryName,
                 rawPayload = rawUri,
                 credentialsMap = mapOf("method" to method, "password" to password),
+                parameters = query,
+                fingerprint = fingerprint
+            )
+        )
+    }
+
+    private fun parseHysteria2(rawUri: String): ParseOutcome {
+        val parts = splitTolerantUri(rawUri)
+            ?: return invalid("hy2", "ساختار لینک Hysteria2 نامعتبر است.", "Malformed Hysteria2 URI.", VpnProtocol.HYSTERIA2)
+
+        val auth = urlDecode(parts.userInfo).trim()
+        val host = parts.host
+        val port = parts.port
+        if (auth.isEmpty() || host.isEmpty() || port !in 1..65535) {
+            return invalid("hy2", "رمز عبور، هاست یا پورت Hysteria2 نامعتبر است.", "Invalid Hysteria2 auth, host, or port.", VpnProtocol.HYSTERIA2)
+        }
+
+        val query = parseQueryParams(parts.rawQuery)
+        val remark = decodeFragment(parts.rawFragment).ifBlank { "Hysteria2 $host" }
+        val obfs = query["obfs"].orEmpty().lowercase()
+        val (countryCode, countryName) = CountryDetector.detect(remark, host)
+        val fingerprint = sha256("hy2|$auth|$host|$port|$obfs|${query["sni"].orEmpty()}|${query["obfs-password"].orEmpty()}")
+
+        return ParseOutcome.Success(
+            ParsedVpnConfig(
+                protocol = VpnProtocol.HYSTERIA2,
+                format = ConfigFormat.URI_LINK,
+                displayName = remark,
+                host = host,
+                port = port,
+                transport = if (obfs.isNotBlank()) "quic+$obfs" else "quic",
+                security = "tls",
+                countryCode = countryCode,
+                countryName = countryName,
+                rawPayload = rawUri,
+                credentialsMap = mapOf(
+                    "password" to auth,
+                    "obfsPassword" to query["obfs-password"].orEmpty()
+                ),
+                parameters = query,
+                fingerprint = fingerprint
+            )
+        )
+    }
+
+    private fun parseAnyTls(rawUri: String): ParseOutcome {
+        val parts = splitTolerantUri(rawUri)
+            ?: return invalid("anytls", "ساختار لینک AnyTLS نامعتبر است.", "Malformed AnyTLS URI.", VpnProtocol.ANYTLS)
+
+        val password = urlDecode(parts.userInfo).trim()
+        val host = parts.host
+        val port = parts.port
+        if (password.isEmpty() || host.isEmpty() || port !in 1..65535) {
+            return invalid("anytls", "رمز عبور، هاست یا پورت AnyTLS نامعتبر است.", "Invalid AnyTLS password, host, or port.", VpnProtocol.ANYTLS)
+        }
+
+        val query = parseQueryParams(parts.rawQuery)
+        val remark = decodeFragment(parts.rawFragment).ifBlank { "AnyTLS $host" }
+        val (countryCode, countryName) = CountryDetector.detect(remark, host)
+        val fingerprint = sha256("anytls|$password|$host|$port|${query["sni"].orEmpty()}|${query["alpn"].orEmpty()}")
+
+        return ParseOutcome.Success(
+            ParsedVpnConfig(
+                protocol = VpnProtocol.ANYTLS,
+                format = ConfigFormat.URI_LINK,
+                displayName = remark,
+                host = host,
+                port = port,
+                transport = "tcp",
+                security = "tls",
+                countryCode = countryCode,
+                countryName = countryName,
+                rawPayload = rawUri,
+                credentialsMap = mapOf("password" to password),
+                parameters = query,
+                fingerprint = fingerprint
+            )
+        )
+    }
+
+    private fun parseShadowTls(rawUri: String): ParseOutcome {
+        val parts = splitTolerantUri(rawUri)
+            ?: return invalid("shadowtls", "ساختار لینک ShadowTLS نامعتبر است.", "Malformed ShadowTLS URI.", VpnProtocol.SHADOWTLS)
+
+        val query = parseQueryParams(parts.rawQuery)
+        val rawUser = urlDecode(parts.userInfo).trim()
+        val password = query["password"]?.ifBlank { rawUser } ?: rawUser
+        val host = parts.host
+        val port = parts.port
+        if (password.isEmpty() || host.isEmpty() || port !in 1..65535) {
+            return invalid("shadowtls", "اطلاعات ShadowTLS ناقص یا نامعتبر است.", "Invalid ShadowTLS credentials or endpoint.", VpnProtocol.SHADOWTLS)
+        }
+
+        val version = query["version"]?.ifBlank { "3" } ?: "3"
+        val sni = query["sni"]?.ifBlank { query["host"] }?.ifBlank { host } ?: host
+        val ssMethod = query["ss_method"]?.ifBlank { "2022-blake3-aes-128-gcm" } ?: "2022-blake3-aes-128-gcm"
+        val ssPassword = query["ss_password"]?.ifBlank { password } ?: password
+        val remark = decodeFragment(parts.rawFragment).ifBlank { "ShadowTLS $host" }
+        val (countryCode, countryName) = CountryDetector.detect(remark, host)
+        val fingerprint = sha256("shadowtls|$version|$password|$sni|$ssMethod|$ssPassword|$host|$port")
+
+        return ParseOutcome.Success(
+            ParsedVpnConfig(
+                protocol = VpnProtocol.SHADOWTLS,
+                format = ConfigFormat.URI_LINK,
+                displayName = remark,
+                host = host,
+                port = port,
+                transport = "tls-v$version",
+                security = "shadowtls",
+                countryCode = countryCode,
+                countryName = countryName,
+                rawPayload = rawUri,
+                credentialsMap = mapOf(
+                    "password" to password,
+                    "ss_method" to ssMethod,
+                    "ss_password" to ssPassword
+                ),
+                parameters = query + mapOf("sni" to sni, "version" to version),
+                fingerprint = fingerprint
+            )
+        )
+    }
+
+    private fun parseMieru(rawUri: String): ParseOutcome {
+        val parts = splitTolerantUri(rawUri)
+            ?: return invalid("mieru", "ساختار لینک Mieru نامعتبر است (فرمت: mieru://user:pass@host:port).", "Malformed Mieru URI (expected mieru://user:pass@host:port).", VpnProtocol.MIERU)
+
+        val decodedUser = urlDecode(parts.userInfo)
+        val colonIdx = decodedUser.indexOf(':')
+        if (colonIdx <= 0 || colonIdx >= decodedUser.length - 1) {
+            return invalid("mieru", "نام کاربری و رمز عبور Mieru باید به‌صورت user:pass باشد.", "Mieru URI requires username:password.", VpnProtocol.MIERU)
+        }
+        val username = decodedUser.substring(0, colonIdx).trim()
+        val password = decodedUser.substring(colonIdx + 1).trim()
+        val host = parts.host
+        val port = parts.port
+        if (host.isEmpty() || port !in 1..65535) {
+            return invalid("mieru", "آدرس سرور یا پورت Mieru نامعتبر است.", "Invalid Mieru host or port.", VpnProtocol.MIERU)
+        }
+
+        val query = parseQueryParams(parts.rawQuery)
+        val transport = query["transport"]?.uppercase()?.ifBlank { "TCP" } ?: "TCP"
+        val mux = query["multiplexing"]?.uppercase()?.ifBlank { "MULTIPLEXING_LOW" } ?: "MULTIPLEXING_LOW"
+        val remark = decodeFragment(parts.rawFragment).ifBlank { "Mieru $host" }
+        val (countryCode, countryName) = CountryDetector.detect(remark, host)
+        val fingerprint = sha256("mieru|$username|$password|$host|$port|$transport|$mux")
+
+        return ParseOutcome.Success(
+            ParsedVpnConfig(
+                protocol = VpnProtocol.MIERU,
+                format = ConfigFormat.URI_LINK,
+                displayName = remark,
+                host = host,
+                port = port,
+                transport = transport.lowercase(),
+                security = "xchacha20",
+                countryCode = countryCode,
+                countryName = countryName,
+                rawPayload = rawUri,
+                credentialsMap = mapOf(
+                    "username" to username,
+                    "password" to password
+                ),
+                parameters = query + mapOf("transport" to transport, "multiplexing" to mux),
+                fingerprint = fingerprint
+            )
+        )
+    }
+
+    private fun parseCloak(rawUri: String): ParseOutcome {
+        val parts = splitTolerantUri(rawUri)
+            ?: return invalid("cloak", "ساختار لینک Cloak نامعتبر است (فرمت: cloak://UID@host:port?PublicKey=...).", "Malformed Cloak URI.", VpnProtocol.CLOAK)
+
+        val query = parseQueryParams(parts.rawQuery)
+        val uid = urlDecode(parts.userInfo).trim().ifBlank { query["UID"].orEmpty() }
+        val pubKey = query["PublicKey"].orEmpty().ifBlank { query["publicKey"].orEmpty() }.ifBlank { query["pbk"].orEmpty() }
+        val host = parts.host
+        val port = parts.port
+        if (uid.isBlank() || pubKey.isBlank() || host.isEmpty() || port !in 1..65535) {
+            return invalid("cloak", "پارامترهای UID یا PublicKey در لینک Cloak ناقص است.", "Cloak URI requires valid UID, PublicKey, host, and port.", VpnProtocol.CLOAK)
+        }
+
+        val sni = query["ServerName"].orEmpty().ifBlank { query["sni"].orEmpty() }.ifBlank { host }
+        val proxyMethod = query["ProxyMethod"].orEmpty().ifBlank { "shadowsocks" }
+        val encryptionMethod = query["EncryptionMethod"].orEmpty().ifBlank { "plain" }
+        val remark = decodeFragment(parts.rawFragment).ifBlank { "Cloak $host" }
+        val (countryCode, countryName) = CountryDetector.detect(remark, host)
+        val fingerprint = sha256("cloak|$uid|$pubKey|$sni|$proxyMethod|$host|$port")
+
+        return ParseOutcome.Success(
+            ParsedVpnConfig(
+                protocol = VpnProtocol.CLOAK,
+                format = ConfigFormat.URI_LINK,
+                displayName = remark,
+                host = host,
+                port = port,
+                transport = query["Transport"]?.lowercase()?.ifBlank { "direct" } ?: "direct",
+                security = "cloak",
+                countryCode = countryCode,
+                countryName = countryName,
+                rawPayload = rawUri,
+                credentialsMap = mapOf(
+                    "uid" to uid,
+                    "publicKey" to pubKey,
+                    "ss_method" to query["ss_method"].orEmpty().ifBlank { "aes-256-gcm" },
+                    "ss_password" to query["ss_password"].orEmpty()
+                ),
+                parameters = query + mapOf(
+                    "ServerName" to sni,
+                    "ProxyMethod" to proxyMethod,
+                    "EncryptionMethod" to encryptionMethod
+                ),
+                fingerprint = fingerprint
+            )
+        )
+    }
+
+    private fun parseLightway(rawUri: String): ParseOutcome {
+        val withoutScheme = rawUri.substringAfter("://", "")
+        if (withoutScheme.isEmpty()) {
+            return invalid("lightway", "ساختار لینک Lightway نامعتبر است.", "Malformed Lightway URI.", VpnProtocol.LIGHTWAY)
+        }
+        val fragmentIdx = withoutScheme.indexOf('#')
+        val beforeFragment = if (fragmentIdx >= 0) withoutScheme.substring(0, fragmentIdx) else withoutScheme
+        val rawFragment = if (fragmentIdx >= 0) withoutScheme.substring(fragmentIdx + 1) else ""
+        val queryIdx = beforeFragment.indexOf('?')
+        val authority = (if (queryIdx >= 0) beforeFragment.substring(0, queryIdx) else beforeFragment).substringBefore('/').trim()
+        val rawQuery = if (queryIdx >= 0) beforeFragment.substring(queryIdx + 1) else ""
+
+        val userPart = if (authority.contains('@')) authority.substringBeforeLast('@') else ""
+        val hostPortPart = if (authority.contains('@')) authority.substringAfterLast('@') else authority
+        val hostPort = splitHostPort(hostPortPart)
+            ?: return invalid("lightway", "آدرس سرور یا پورت Lightway نامعتبر است.", "Invalid Lightway host:port.", VpnProtocol.LIGHTWAY)
+
+        val (host, port) = hostPort
+        val query = parseQueryParams(rawQuery)
+        val proto = query["protocol"]?.lowercase()?.ifBlank { "udp" } ?: "udp"
+        val cipher = query["cipher"]?.lowercase()?.ifBlank { "aes" } ?: "aes"
+        val remark = decodeFragment(rawFragment).ifBlank { "Lightway $host" }
+        val (countryCode, countryName) = CountryDetector.detect(remark, host)
+        val fingerprint = sha256("lightway|$host|$port|$proto|$cipher|$userPart")
+
+        return ParseOutcome.Success(
+            ParsedVpnConfig(
+                protocol = VpnProtocol.LIGHTWAY,
+                format = ConfigFormat.URI_LINK,
+                displayName = remark,
+                host = host,
+                port = port,
+                transport = proto,
+                security = "dtls-$cipher",
+                countryCode = countryCode,
+                countryName = countryName,
+                rawPayload = rawUri,
+                credentialsMap = mapOf(
+                    "token" to urlDecode(userPart),
+                    "ca" to query["ca"].orEmpty(),
+                    "cert" to query["cert"].orEmpty(),
+                    "key" to query["key"].orEmpty()
+                ),
+                parameters = query + mapOf("protocol" to proto, "cipher" to cipher),
+                fingerprint = fingerprint
+            )
+        )
+    }
+
+    private fun parseSemicolonPluginOptions(rawOpts: String): Map<String, String> {
+        if (rawOpts.isBlank()) return emptyMap()
+        val map = linkedMapOf<String, String>()
+        for (part in rawOpts.split(';')) {
+            val eq = part.indexOf('=')
+            if (eq > 0) {
+                map[part.substring(0, eq).trim()] = part.substring(eq + 1).trim()
+            }
+        }
+        return map
+    }
+
+    private fun parseTuic(rawUri: String): ParseOutcome {
+        val parts = splitTolerantUri(rawUri)
+            ?: return invalid("tuic", "ساختار لینک TUIC نامعتبر است.", "Malformed TUIC URI.", VpnProtocol.TUIC)
+
+        val decodedUserInfo = urlDecode(parts.userInfo)
+        val colonIdx = decodedUserInfo.indexOf(':')
+        val uuid = if (colonIdx >= 0) decodedUserInfo.substring(0, colonIdx).trim() else decodedUserInfo.trim()
+        val password = if (colonIdx >= 0) decodedUserInfo.substring(colonIdx + 1) else ""
+        val host = parts.host
+        val port = parts.port
+
+        if (!isValidUuidOrToken(uuid)) {
+            return invalid("tuic", "شناسه UUID در لینک TUIC معتبر نیست.", "Invalid TUIC UUID.", VpnProtocol.TUIC)
+        }
+        if (host.isEmpty() || port !in 1..65535) {
+            return invalid("tuic", "آدرس سرور یا پورت TUIC نامعتبر است.", "Invalid TUIC host or port.", VpnProtocol.TUIC)
+        }
+
+        val query = parseQueryParams(parts.rawQuery)
+        val remark = decodeFragment(parts.rawFragment).ifBlank { "TUIC $host" }
+        val congestion = query["congestion_control"]?.lowercase()?.ifBlank { "bbr" } ?: "bbr"
+        val (countryCode, countryName) = CountryDetector.detect(remark, host)
+        val fingerprint = sha256("tuic|$uuid|$password|$host|$port|$congestion|${query["sni"].orEmpty()}|${query["alpn"].orEmpty()}")
+
+        return ParseOutcome.Success(
+            ParsedVpnConfig(
+                protocol = VpnProtocol.TUIC,
+                format = ConfigFormat.URI_LINK,
+                displayName = remark,
+                host = host,
+                port = port,
+                transport = "quic",
+                security = "tls",
+                countryCode = countryCode,
+                countryName = countryName,
+                rawPayload = rawUri,
+                credentialsMap = mapOf(
+                    "uuid" to uuid,
+                    "password" to password
+                ),
                 parameters = query,
                 fingerprint = fingerprint
             )

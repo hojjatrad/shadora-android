@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" tools:node="remove" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
@@ -70,6 +72,14 @@
                 <data android:scheme="vmess" />
                 <data android:scheme="trojan" />
                 <data android:scheme="ss" />
+                <data android:scheme="tuic" />
+                <data android:scheme="hy2" />
+                <data android:scheme="hysteria2" />
+                <data android:scheme="anytls" />
+                <data android:scheme="shadowtls" />
+                <data android:scheme="mieru" />
+                <data android:scheme="cloak" />
+                <data android:scheme="lightway" />
                 <data android:scheme="shadora" />
             </intent-filter>
         </activity>
@@ -89,7 +99,7 @@
                 android:value="vpn_client_tunnel" />
         </service>
 
-        <!-- Official WireGuard GoBackend VpnService for native WireGuard / AmneziaWG tunnels -->
+        <!-- Official WireGuard GoBackend VpnService for native WireGuard tunnels -->
         <service
             android:name="com.wireguard.android.backend.GoBackend$VpnService"
             android:exported="false"
@@ -103,6 +113,26 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="wireguard_vpn_tunnel" />
         </service>
+
+        <!-- Native AmneziaWG GoBackend VpnService for obfuscated AmneziaWG tunnels -->
+        <service
+            android:name="org.amnezia.awg.backend.AbstractBackend$VpnService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            tools:replace="android:exported">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="amneziawg_vpn_tunnel" />
+        </service>
+
+        <!-- Remove unused secondary OpenVPNService from library; OpenVPN3 runs directly inside ShadoraVpnService -->
+        <service
+            android:name="com.tim.openvpn.service.OpenVPNService"
+            tools:node="remove" />
 
         <!-- Android Quick Settings Tile for one-tap VPN control from notification shade -->
         <service

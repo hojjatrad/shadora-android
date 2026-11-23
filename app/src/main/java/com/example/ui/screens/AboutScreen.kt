@@ -221,10 +221,13 @@ fun AboutScreen(
                 Text(strings.openSourceLicensesTitle, style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(6.dp))
                 val licenses = listOf(
+                    "sing-box / libbox-android (net.clever-vpn:libbox-android) — GPL-3.0-or-later",
                     "WireGuard Android Tunnel (com.wireguard.android:tunnel) — Apache-2.0",
+                    "AmneziaWG Android Tunnel (com.zaneschepke:amneziawg-android) — Apache-2.0 / GPL-2.0",
+                    "OpenVPN 3 Core Android (io.github.tim06:vpnprotocols-openvpn) — AGPL-3.0 / Apache-2.0",
                     "ZXing Core (com.google.zxing:core) — Apache-2.0",
                     "OkHttp (com.squareup.okhttp3:okhttp) — Apache-2.0",
-                    "AndroidX Jetpack Compose, Room, CameraX — Apache-2.0",
+                    "AndroidX Jetpack Compose, Room, CameraX, Biometric — Apache-2.0",
                     "Readex Pro, Outfit, Vazirmatn, JetBrains Mono — SIL Open Font License 1.1"
                 )
                 licenses.forEach { lic ->

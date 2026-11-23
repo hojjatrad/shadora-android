@@ -1,10 +1,19 @@
-name: Build SHADORA APK (Full Native Xray + WireGuard)
+name: Build SHADORA Multi-Core APK (All 14 Protocols + Mieru & Cloak NDK)
 
 on:
   workflow_dispatch:
     inputs:
-      libv2ray_version:
-        description: "AndroidLibXrayLite release tag (leave 'latest' for newest official release)"
+      include_libv2ray:
+        description: "Also bundle optional AndroidLibXrayLite (libv2ray.aar) alongside sing-box"
+        required: false
+        default: "false"
+        type: boolean
+      mieru_version:
+        description: "Mieru git tag to cross-compile (e.g. v3.12.0 or 'latest')"
+        required: false
+        default: "latest"
+      cloak_version:
+        description: "Cloak git tag to cross-compile (e.g. v2.10.0 or 'latest')"
         required: false
         default: "latest"
   push:
@@ -24,25 +33,68 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Set up Gradle
+      - name: Set up Go 1.23 (for Mieru & Cloak cross-compilation)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.3.1"
 
-      - name: Download official libv2ray.aar (AndroidLibXrayLite)
+      - name: Cross-compile Mieru (libmieru.so) for Android ABIs
         env:
-          REQ_TAG: ${{ github.event.inputs.libv2ray_version || 'latest' }}
+          REQ_TAG: ${{ github.event.inputs.mieru_version || 'latest' }}
+        run: |
+          set -euo pipefail
+          WORKDIR=$(mktemp -d)
+          if [ "$REQ_TAG" = "latest" ]; then
+            git clone --depth 1 https://github.com/enfein/mieru.git "$WORKDIR/mieru"
+          else
+            git clone --depth 1 --branch "$REQ_TAG" https://github.com/enfein/mieru.git "$WORKDIR/mieru"
+          fi
+          cd "$WORKDIR/mieru"
+          mkdir -p "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a" \
+                   "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a" \
+                   "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64"
+
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
+            -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libmieru.so" ./cmd/mieru
+          CGO_ENABLED=0 GOOS=android GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" \
+            -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a/libmieru.so" ./cmd/mieru
+          CGO_ENABLED=0 GOOS=android GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
+            -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64/libmieru.so" ./cmd/mieru
+
+      - name: Cross-compile Cloak ck-client (libckclient.so) for Android ABIs
+        env:
+          REQ_TAG: ${{ github.event.inputs.cloak_version || 'latest' }}
+        run: |
+          set -euo pipefail
+          WORKDIR=$(mktemp -d)
+          if [ "$REQ_TAG" = "latest" ]; then
+            git clone --depth 1 https://github.com/cbeuw/Cloak.git "$WORKDIR/cloak"
+          else
+            git clone --depth 1 --branch "$REQ_TAG" https://github.com/cbeuw/Cloak.git "$WORKDIR/cloak"
+          fi
+          cd "$WORKDIR/cloak"
+          mkdir -p "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a" \
+                   "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a" \
+                   "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64"
+
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
+            -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libckclient.so" ./cmd/ck-client
+          CGO_ENABLED=0 GOOS=android GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" \
+            -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a/libckclient.so" ./cmd/ck-client
+          CGO_ENABLED=0 GOOS=android GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
+            -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64/libckclient.so" ./cmd/ck-client
+
+      - name: Download optional libv2ray.aar (if enabled)
+        if: ${{ github.event.inputs.include_libv2ray == true }}
         run: |
           set -euo pipefail
           mkdir -p app/libs
-
-          if [ "$REQ_TAG" = "latest" ]; then
-            API_URL="https://api.github.com/repos/2dust/AndroidLibXrayLite/releases/latest"
-          else
-            API_URL="https://api.github.com/repos/2dust/AndroidLibXrayLite/releases/tags/${REQ_TAG}"
-          fi
-
-          AAR_URL=$(curl -fsSL "$API_URL" | python3 -c "
+          AAR_URL=$(curl -fsSL "https://api.github.com/repos/2dust/AndroidLibXrayLite/releases/latest" | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
           for a in data.get('assets', []):
@@ -50,15 +102,9 @@ jobs:
                   print(a['browser_download_url'])
                   break
           ")
-
-          if [ -z "$AAR_URL" ]; then
-            echo "ERROR: Could not find libv2ray.aar in AndroidLibXrayLite release."
-            exit 1
+          if [ -n "$AAR_URL" ]; then
+            curl -fL --retry 3 -o app/libs/libv2ray.aar "$AAR_URL"
           fi
-
-          echo "Downloading $AAR_URL -> app/libs/libv2ray.aar"
-          curl -fL --retry 3 -o app/libs/libv2ray.aar "$AAR_URL"
-          ls -lh app/libs/libv2ray.aar
 
       - name: Ensure debug keystore exists
         run: |
@@ -69,12 +115,12 @@ jobs:
               -dname "CN=Shadora Debug,O=Shadora,C=US"
           fi
 
-      - name: Build Full Xray + WireGuard APK
+      - name: Build Full Multi-Core SHADORA APK
         run: gradle :app:assembleDebug --no-daemon
 
-      - name: Upload SHADORA Full Xray APK Artifact
+      - name: Upload SHADORA Multi-Core APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: shadora-vpn-full-xray-apk
+          name: shadora-vpn-multicore-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error

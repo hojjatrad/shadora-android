@@ -20,6 +20,12 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    ndk {
+      // arm64-v8a covers modern Android phones; x86_64 covers the AI Studio Streaming Emulator.
+      // Keeps the compressed multi-core APK comfortably under 100 MB for fast preview & USB install.
+      abiFilters += listOf("arm64-v8a", "x86_64")
+    }
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -65,6 +71,13 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  packaging {
+    jniLibs {
+      // Compress large native Go/C++ VPN cores inside the APK so installs and streaming preview load fast
+      // and native executables (libmieru.so / libckclient.so) are extracted to nativeLibraryDir cleanly.
+      useLegacyPackaging = true
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
@@ -127,6 +140,9 @@ dependencies {
   // implementation(libs.retrofit)
   implementation(libs.zxing.core)
   implementation(libs.wireguard.tunnel)
+  implementation(libs.amneziawg.android)
+  implementation(libs.libbox.android)
+  implementation(libs.vpnprotocols.openvpn)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

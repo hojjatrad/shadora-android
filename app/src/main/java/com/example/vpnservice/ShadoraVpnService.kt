@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.ShadoraApplication
+import com.example.core.model.VpnProtocol
 import com.example.core.util.FormatUtils
 import com.example.enginemanager.EngineLaunchPlan
 import com.example.security.SafeLogger
@@ -29,25 +30,22 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.FileInputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 
 /**
  * Real Android VpnService for SHADORA:
- * - Establishes Android TUN interface with explicit IPv4/IPv6 routes & anti-leak DNS servers
- * - Supports Split Tunneling (All Apps, Bypass Selected, Only Selected)
- * - Enforces Kill Switch behavior (disallows bypass on TUN)
- * - Monitors Wi-Fi / Mobile Data switches via ConnectivityManager.NetworkCallback
- * - Performs automatic exponential-backoff reconnect when Auto-Connect is enabled
- * - Streams live ↓/↑ traffic speed into the persistent foreground notification
- * - Cleans up all resources cleanly on disconnect, revoke, or crash recovery
+ * - Hosts bundled native `libbox.so` (sing-box 1.12+) for VLESS (XTLS-Reality/Vision/TLS/WS/gRPC/HTTPUpgrade),
+ *   VMess, Trojan, Shadowsocks, and TUIC v5
+ * - Hosts bundled native `libovpn3.so` (OpenVPN 3 C++ Core) for `.ovpn` tunnels
+ * - Also supports optional `libv2ray.aar` (Xray-core) drop-in builds
+ * - Supports Split Tunneling, Kill Switch, IPv6 leak guard, Always-On VPN, Wi-Fi/Cellular handoff,
+ *   and live ↓/↑ speed notifications
  */
 class ShadoraVpnService : VpnService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var tunInterface: ParcelFileDescriptor? = null
-    private var tunReaderJob: Job? = null
     private var notificationUpdateJob: Job? = null
     private var reconnectJob: Job? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -135,10 +133,24 @@ class ShadoraVpnService : VpnService() {
         serviceScope.launch {
             val settings = app.repository.getAppSettings()
             val isPersian = settings.languageCode == "fa"
+            val dnsList = listOf(plan.primaryDns, plan.secondaryDns).filter { it.isNotBlank() }
+                .ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
 
-            // Step 1: Protected server reachability handshake before capturing device traffic
-            val reachableMs = probeRemoteServerProtected(plan.remoteHost, plan.remotePort)
-            if (reachableMs < 0) {
+            // Step 1: Protected TCP reachability handshake for TCP-based proxy protocols
+            // (Skipped for UDP/QUIC protocols so UDP servers are not falsely rejected)
+            val isUdpProtocol = plan.protocol in setOf(
+                VpnProtocol.TUIC,
+                VpnProtocol.HYSTERIA2,
+                VpnProtocol.OPENVPN,
+                VpnProtocol.LIGHTWAY
+            )
+            val reachableMs = if (isUdpProtocol) {
+                0
+            } else {
+                probeRemoteServerProtected(plan.remoteHost, plan.remotePort)
+            }
+
+            if (!isUdpProtocol && reachableMs < 0) {
                 SafeLogger.w(TAG, "Remote server unreachable on ${plan.remoteHost}:${plan.remotePort}")
                 engineManager.onVpnServiceError(
                     code = "SERVER_UNREACHABLE",
@@ -150,45 +162,219 @@ class ShadoraVpnService : VpnService() {
                 return@launch
             }
 
-            // Step 2: NEVER black-hole device traffic if the native forwarding engine binary is not bundled
+            // Step 2: Ensure a real native forwarding engine is available (never black-hole device traffic)
             if (!plan.isFullNativeTunnel) {
-                val missingArtifact = when (plan.engineId) {
-                    "xray" -> "libv2ray.aar"
-                    "amneziawg" -> "libawg-go.so"
-                    "openvpn" -> "libovpnexec.so"
+                val missingBin = when (plan.engineId) {
+                    "mieru" -> MieruNativeBridge.BINARY_NAME
+                    "cloak" -> CloakNativeBridge.BINARY_NAME
+                    "lightway" -> LightwayNativeBridge.BINARY_NAME
                     else -> "${plan.engineId}-native"
                 }
-                SafeLogger.w(
-                    TAG,
-                    "Server reachable (${reachableMs}ms), but native core '$missingArtifact' is not bundled. Aborting TUN capture to preserve internet."
-                )
+                SafeLogger.w(TAG, "Native engine '$missingBin' missing for ${plan.engineId}; aborting TUN capture.")
                 engineManager.onVpnServiceError(
                     code = "NATIVE_CORE_MISSING",
-                    messageFa = "سرور در دسترس است (${reachableMs}ms) و کانفیگ ${plan.protocol.displayName} معتبر است، اما فایل هسته بومی ($missingArtifact) در این APK وجود ندارد. برای جلوگیری از قطع اینترنت و باز نشدن برنامه‌ها، رابط TUN فعال نشد. اکنون پروتکل WireGuard به‌صورت بومی و کامل کار می‌کند؛ برای Xray فایل libv2ray.aar را در app/libs قرار دهید.",
-                    messageEn = "Server is reachable (${reachableMs}ms) and ${plan.protocol.displayName} config is valid, but native core ($missingArtifact) is not bundled in this APK. TUN capture was halted to prevent internet black-hole. WireGuard works natively now; drop libv2ray.aar into app/libs/ to enable full Xray forwarding."
+                    messageFa = "کانفیگ ${plan.protocol.displayName} معتبر است، اما باینری بومی ($missingBin) در این APK وجود ندارد. برای ساخت خودکار APK دارای $missingBin، ورک‌فلو GitHub Actions پروژه را اجرا کنید.",
+                    messageEn = "${plan.protocol.displayName} config is valid, but native binary ($missingBin) is not bundled in this build. Run the project's GitHub Actions workflow to auto-compile and bundle $missingBin."
                 )
                 stopTunnelSession("NATIVE_CORE_MISSING")
                 stopSelf()
                 return@launch
             }
 
-            // Step 3: Build and establish real Android TUN interface
-            val established = establishTunInterface(plan, settings.bypassLanCidrs)
-            if (established == null) {
-                engineManager.onVpnServiceError(
-                    code = "TUN_ESTABLISH_FAILED",
-                    messageFa = "ایجاد رابط TUN اندروید ناموفق بود. مجوز VPN را دوباره بررسی کنید.",
-                    messageEn = "Failed to establish Android TUN interface."
+            // Step 3A: Bundled sing-box / libbox.so native engine (VLESS, VMess, Trojan, Shadowsocks, TUIC v5)
+            if (plan.engineId == "xray" && SingBoxNativeBridge.isAvailable()) {
+                val result = SingBoxNativeBridge.start(
+                    vpnService = this@ShadoraVpnService,
+                    plan = plan,
+                    bypassLanCidrs = settings.bypassLanCidrs
                 )
-                stopTunnelSession("TUN_FAILED")
-                stopSelf()
+                result.onSuccess { localAddr ->
+                    registerNetworkCallback()
+                    val latencyLabel = if (reachableMs > 0) " (${reachableMs}ms)" else ""
+                    SafeLogger.i(TAG, "Native sing-box tunnel active for ${plan.serverName} (${plan.protocol.displayName})$latencyLabel")
+                    updateForegroundNotification(
+                        title = "${getString(R.string.app_name)} • ${plan.protocol.displayName}",
+                        body = "${plan.serverName}$latencyLabel"
+                    )
+                    engineManager.onVpnServiceConnected(
+                        plan = plan,
+                        localAddress = localAddr,
+                        dnsServers = dnsList,
+                        isPersian = isPersian
+                    )
+                    startLiveNotificationUpdates(app, plan, settings.notificationsEnabled)
+                }.onFailure { err ->
+                    val detail = SafeLogger.sanitize(err.message.orEmpty())
+                    engineManager.onVpnServiceError(
+                        code = "SINGBOX_CORE_START_FAILED",
+                        messageFa = "راه‌اندازی هسته بومی sing-box با خطا مواجه شد: $detail",
+                        messageEn = "Failed to start native sing-box core: $detail"
+                    )
+                    stopTunnelSession("SINGBOX_CORE_FAILED")
+                    stopSelf()
+                }
                 return@launch
             }
 
-            tunInterface = established
+            // Step 3B: Bundled OpenVPN 3 C++ native engine (`libovpn3.so`)
+            if (plan.engineId == "openvpn" && OpenVpn3NativeBridge.isAvailable()) {
+                val started = OpenVpn3NativeBridge.start(
+                    vpnService = this@ShadoraVpnService,
+                    plan = plan,
+                    bypassLanCidrs = settings.bypassLanCidrs,
+                    onConnected = { localIp ->
+                        registerNetworkCallback()
+                        SafeLogger.i(TAG, "Native OpenVPN 3 tunnel connected (${plan.serverName}, $localIp)")
+                        updateForegroundNotification(
+                            title = "${getString(R.string.app_name)} • OpenVPN",
+                            body = plan.serverName
+                        )
+                        engineManager.onVpnServiceConnected(
+                            plan = plan,
+                            localAddress = localIp,
+                            dnsServers = dnsList,
+                            isPersian = isPersian
+                        )
+                        startLiveNotificationUpdates(app, plan, settings.notificationsEnabled)
+                    },
+                    onError = { code, detail ->
+                        val safe = SafeLogger.sanitize(detail)
+                        engineManager.onVpnServiceError(
+                            code = code,
+                            messageFa = "خطا در اتصال OpenVPN 3: $safe",
+                            messageEn = "OpenVPN 3 connection failed: $safe"
+                        )
+                        stopTunnelSession(code)
+                        stopSelf()
+                    }
+                )
+                if (!started) {
+                    stopTunnelSession("OVPN_INIT_FAILED")
+                    stopSelf()
+                }
+                return@launch
+            }
 
-            // Step 4: Boot bundled native Xray core bound to TUN fd when present
+            // Step 3B-2: Bundled Mieru (`libmieru.so`) chained into sing-box TUN
+            if (plan.engineId == "mieru" && MieruNativeBridge.isAvailable(this@ShadoraVpnService)) {
+                val env = runCatching { org.json.JSONObject(plan.compiledConfig) }.getOrNull()
+                val mieruCfg = env?.optString("engineConfig").orEmpty()
+                val tunChainCfg = env?.optString("tunChainConfig").orEmpty()
+                if (mieruCfg.isBlank() || tunChainCfg.isBlank() ||
+                    !MieruNativeBridge.start(this@ShadoraVpnService, mieruCfg)
+                ) {
+                    engineManager.onVpnServiceError(
+                        code = "MIERU_START_FAILED",
+                        messageFa = "راه‌اندازی هسته بومی Mieru ناموفق بود.",
+                        messageEn = "Failed to start native Mieru core."
+                    )
+                    stopTunnelSession("MIERU_FAILED")
+                    stopSelf()
+                    return@launch
+                }
+                val chainedPlan = plan.copy(compiledConfig = tunChainCfg)
+                SingBoxNativeBridge.start(this@ShadoraVpnService, chainedPlan, settings.bypassLanCidrs)
+                    .onSuccess { localAddr ->
+                        registerNetworkCallback()
+                        updateForegroundNotification(
+                            title = "${getString(R.string.app_name)} • Mieru",
+                            body = plan.serverName
+                        )
+                        engineManager.onVpnServiceConnected(plan, localAddr, dnsList, isPersian)
+                        startLiveNotificationUpdates(app, plan, settings.notificationsEnabled)
+                    }
+                    .onFailure { err ->
+                        engineManager.onVpnServiceError(
+                            code = "MIERU_TUN_CHAIN_FAILED",
+                            messageFa = "خطا در اتصال تونل Mieru: ${SafeLogger.sanitize(err.message.orEmpty())}",
+                            messageEn = "Failed chaining Mieru into TUN: ${SafeLogger.sanitize(err.message.orEmpty())}"
+                        )
+                        stopTunnelSession("MIERU_TUN_FAILED")
+                        stopSelf()
+                    }
+                return@launch
+            }
+
+            // Step 3B-3: Bundled Cloak (`libckclient.so`) chained into sing-box TUN
+            if (plan.engineId == "cloak" && CloakNativeBridge.isAvailable(this@ShadoraVpnService)) {
+                val env = runCatching { org.json.JSONObject(plan.compiledConfig) }.getOrNull()
+                val cloakCfg = env?.optString("engineConfig").orEmpty()
+                val tunChainCfg = env?.optString("tunChainConfig").orEmpty()
+                if (cloakCfg.isBlank() || tunChainCfg.isBlank() ||
+                    !CloakNativeBridge.start(this@ShadoraVpnService, cloakCfg, plan.remoteHost, plan.remotePort)
+                ) {
+                    engineManager.onVpnServiceError(
+                        code = "CLOAK_START_FAILED",
+                        messageFa = "راه‌اندازی پلاگین بومی Cloak ناموفق بود.",
+                        messageEn = "Failed to start native Cloak ck-client."
+                    )
+                    stopTunnelSession("CLOAK_FAILED")
+                    stopSelf()
+                    return@launch
+                }
+                val chainedPlan = plan.copy(compiledConfig = tunChainCfg)
+                SingBoxNativeBridge.start(this@ShadoraVpnService, chainedPlan, settings.bypassLanCidrs)
+                    .onSuccess { localAddr ->
+                        registerNetworkCallback()
+                        updateForegroundNotification(
+                            title = "${getString(R.string.app_name)} • Cloak",
+                            body = plan.serverName
+                        )
+                        engineManager.onVpnServiceConnected(plan, localAddr, dnsList, isPersian)
+                        startLiveNotificationUpdates(app, plan, settings.notificationsEnabled)
+                    }
+                    .onFailure { err ->
+                        engineManager.onVpnServiceError(
+                            code = "CLOAK_TUN_CHAIN_FAILED",
+                            messageFa = "خطا در اتصال تونل Cloak: ${SafeLogger.sanitize(err.message.orEmpty())}",
+                            messageEn = "Failed chaining Cloak into TUN: ${SafeLogger.sanitize(err.message.orEmpty())}"
+                        )
+                        stopTunnelSession("CLOAK_TUN_FAILED")
+                        stopSelf()
+                    }
+                return@launch
+            }
+
+            // Step 3B-4: Bundled Lightway AAR (`liblightway.so`)
+            if (plan.engineId == "lightway" && LightwayNativeBridge.isAvailable(this@ShadoraVpnService)) {
+                val established = establishTunInterface(plan, settings.bypassLanCidrs)
+                if (established == null || !LightwayNativeBridge.start(this@ShadoraVpnService, plan.compiledConfig, established.fd)) {
+                    runCatching { established?.close() }
+                    engineManager.onVpnServiceError(
+                        code = "LIGHTWAY_START_FAILED",
+                        messageFa = "راه‌اندازی هسته بومی Lightway ناموفق بود.",
+                        messageEn = "Failed to start native Lightway core."
+                    )
+                    stopTunnelSession("LIGHTWAY_FAILED")
+                    stopSelf()
+                    return@launch
+                }
+                tunInterface = established
+                registerNetworkCallback()
+                updateForegroundNotification(
+                    title = "${getString(R.string.app_name)} • Lightway",
+                    body = plan.serverName
+                )
+                engineManager.onVpnServiceConnected(plan, TUN_IPV4_ADDRESS, dnsList, isPersian)
+                startLiveNotificationUpdates(app, plan, settings.notificationsEnabled)
+                return@launch
+            }
+
+            // Step 3C: Optional drop-in `libv2ray.aar` Xray-core fallback
             if (plan.engineId == "xray" && XrayNativeBridge.isAvailable()) {
+                val established = establishTunInterface(plan, settings.bypassLanCidrs)
+                if (established == null) {
+                    engineManager.onVpnServiceError(
+                        code = "TUN_ESTABLISH_FAILED",
+                        messageFa = "ایجاد رابط TUN اندروید ناموفق بود. مجوز VPN را دوباره بررسی کنید.",
+                        messageEn = "Failed to establish Android TUN interface."
+                    )
+                    stopTunnelSession("TUN_FAILED")
+                    stopSelf()
+                    return@launch
+                }
+                tunInterface = established
+
                 val coreStarted = XrayNativeBridge.start(this@ShadoraVpnService, plan.compiledConfig, established.fd)
                 if (!coreStarted) {
                     engineManager.onVpnServiceError(
@@ -200,36 +386,36 @@ class ShadoraVpnService : VpnService() {
                     stopSelf()
                     return@launch
                 }
+
+                registerNetworkCallback()
+                SafeLogger.i(TAG, "Native libv2ray TUN active for ${plan.serverName} (${plan.protocol.displayName}, ${reachableMs}ms)")
+                updateForegroundNotification(
+                    title = "${getString(R.string.app_name)} • ${plan.protocol.displayName}",
+                    body = "${plan.serverName} (${reachableMs}ms)"
+                )
+                engineManager.onVpnServiceConnected(
+                    plan = plan,
+                    localAddress = TUN_IPV4_ADDRESS,
+                    dnsServers = dnsList,
+                    isPersian = isPersian
+                )
+                startLiveNotificationUpdates(app, plan, settings.notificationsEnabled)
+                return@launch
             }
 
-            registerNetworkCallback()
-
-            val dnsList = listOf(plan.primaryDns, plan.secondaryDns).filter { it.isNotBlank() }
-                .ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
-
-            SafeLogger.i(TAG, "TUN established for ${plan.serverName} (${plan.protocol.displayName}, ${reachableMs}ms)")
-
-            updateForegroundNotification(
-                title = "${getString(R.string.app_name)} • ${plan.protocol.displayName}",
-                body = "${plan.serverName} (${reachableMs}ms)"
+            // Fallback safety net: never leave an unbacked TUN active
+            engineManager.onVpnServiceError(
+                code = "NATIVE_CORE_UNAVAILABLE",
+                messageFa = "هسته بومی مناسب برای ${plan.protocol.displayName} در دسترس نیست.",
+                messageEn = "No native forwarding engine available for ${plan.protocol.displayName}."
             )
-
-            engineManager.onVpnServiceConnected(
-                plan = plan,
-                localAddress = TUN_IPV4_ADDRESS,
-                dnsServers = dnsList,
-                isPersian = isPersian
-            )
-
-            // Step 5: Live speed telemetry updates in foreground notification
-            startLiveNotificationUpdates(app, plan, settings.notificationsEnabled)
-
-            // Step 6: Only run fallback reader if no native core owns the TUN fd
-            if (!(plan.engineId == "xray" && XrayNativeBridge.isAvailable())) {
-                startTunPacketLoop(established)
-            }
+            stopTunnelSession("NO_ENGINE")
+            stopSelf()
         }
     }
+
+    private fun isAnyNativeTunnelActive(): Boolean =
+        SingBoxNativeBridge.isRunning() || OpenVpn3NativeBridge.isRunning() || tunInterface != null
 
     private fun startLiveNotificationUpdates(
         app: ShadoraApplication,
@@ -239,7 +425,7 @@ class ShadoraVpnService : VpnService() {
         notificationUpdateJob?.cancel()
         if (!showLiveSpeed) return
         notificationUpdateJob = serviceScope.launch {
-            while (isActive && tunInterface != null) {
+            while (isActive && isAnyNativeTunnelActive()) {
                 delay(2000L)
                 val snap = app.engineManager.trafficSnapshot.value
                 val down = FormatUtils.formatSpeed(snap.rxBytesPerSec)
@@ -262,18 +448,22 @@ class ShadoraVpnService : VpnService() {
             val isPersian = settings.languageCode == "fa"
 
             for (attempt in 1..3) {
-                if (tunInterface == null && currentPlan == null) return@launch
+                if (!isAnyNativeTunnelActive() && currentPlan == null) return@launch
                 app.engineManager.onVpnServiceReconnecting(attempt, networkLabel)
                 SafeLogger.i(TAG, "Auto-reconnect attempt #$attempt on $networkLabel")
                 delay(attempt * 1200L)
 
-                val ms = probeRemoteServerProtected(plan.remoteHost, plan.remotePort)
+                if (SingBoxNativeBridge.isRunning()) {
+                    SingBoxNativeBridge.resetNetwork()
+                }
+                val isUdpProtocol = plan.protocol == VpnProtocol.TUIC || plan.protocol == VpnProtocol.OPENVPN
+                val ms = if (isUdpProtocol) 1 else probeRemoteServerProtected(plan.remoteHost, plan.remotePort)
                 if (ms > 0) {
                     val dnsList = listOf(plan.primaryDns, plan.secondaryDns).filter { it.isNotBlank() }
                         .ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
                     app.engineManager.onVpnServiceConnected(
                         plan = plan,
-                        localAddress = TUN_IPV4_ADDRESS,
+                        localAddress = if (SingBoxNativeBridge.isRunning()) SingBoxNativeBridge.getActiveLocalAddress() else TUN_IPV4_ADDRESS,
                         dnsServers = dnsList,
                         isPersian = isPersian
                     )
@@ -295,7 +485,6 @@ class ShadoraVpnService : VpnService() {
                 .addRoute("0.0.0.0", 0)
                 .setBlocking(false)
 
-            // Exclude local LAN private CIDRs on Android 13+ when LAN bypass is active
             if (bypassLanCidrs && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 listOf(
                     "10.0.0.0" to 8,
@@ -309,12 +498,10 @@ class ShadoraVpnService : VpnService() {
                 }
             }
 
-            // IPv6 handling & leak guard
             if (plan.ipv6Enabled) {
                 builder.addAddress(TUN_IPV6_ADDRESS, 126)
                 builder.addRoute("::", 0)
             } else {
-                // Capture IPv6 default route into TUN without external forwarding to prevent ISP IPv6 leak
                 try {
                     builder.addAddress(TUN_IPV6_ADDRESS, 126)
                     builder.addRoute("::", 0)
@@ -323,14 +510,12 @@ class ShadoraVpnService : VpnService() {
                 }
             }
 
-            // Explicit anti-leak DNS servers
             val primaryDns = plan.primaryDns.ifBlank { "1.1.1.1" }
             runCatching { builder.addDnsServer(primaryDns) }
             if (plan.secondaryDns.isNotBlank()) {
                 runCatching { builder.addDnsServer(plan.secondaryDns) }
             }
 
-            // Kill Switch policy: only allowBypass when Kill Switch is OFF
             if (!plan.killSwitchEnabled) {
                 builder.allowBypass()
             }
@@ -339,7 +524,6 @@ class ShadoraVpnService : VpnService() {
                 builder.setMetered(false)
             }
 
-            // Split Tunneling (always exclude self to prevent routing loop)
             when (plan.splitTunnelMode) {
                 "BYPASS_SELECTED" -> {
                     runCatching { builder.addDisallowedApplication(packageName) }
@@ -383,26 +567,6 @@ class ShadoraVpnService : VpnService() {
         }
     }
 
-    private fun startTunPacketLoop(pfd: ParcelFileDescriptor) {
-        tunReaderJob?.cancel()
-        tunReaderJob = serviceScope.launch {
-            val buffer = ByteArray(32767)
-            try {
-                FileInputStream(pfd.fileDescriptor).use { input ->
-                    while (tunInterface != null) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        if (read == 0) {
-                            delay(50)
-                        }
-                    }
-                }
-            } catch (_: Throwable) {
-                // Expected when TUN ParcelFileDescriptor is closed on disconnect
-            }
-        }
-    }
-
     private fun registerNetworkCallback() {
         unregisterNetworkCallback()
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
@@ -417,6 +581,9 @@ class ShadoraVpnService : VpnService() {
                     setUnderlyingNetworks(arrayOf(network))
                 } catch (_: Throwable) {
                     // Ignored on older API
+                }
+                if (SingBoxNativeBridge.isRunning()) {
+                    SingBoxNativeBridge.resetNetwork()
                 }
                 val caps = cm.getNetworkCapabilities(network)
                 val label = when {
@@ -456,9 +623,14 @@ class ShadoraVpnService : VpnService() {
         reconnectJob = null
         notificationUpdateJob?.cancel()
         notificationUpdateJob = null
-        tunReaderJob?.cancel()
-        tunReaderJob = null
+
+        SingBoxNativeBridge.stop()
+        OpenVpn3NativeBridge.stop()
+        MieruNativeBridge.stop()
+        CloakNativeBridge.stop()
+        LightwayNativeBridge.stop()
         XrayNativeBridge.stop()
+
         runCatching { tunInterface?.close() }
         tunInterface = null
         currentPlan = null

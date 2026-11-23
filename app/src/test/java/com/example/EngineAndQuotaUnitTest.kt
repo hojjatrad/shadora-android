@@ -4,6 +4,9 @@ import com.example.configmanager.ConfigParser
 import com.example.configmanager.ParseOutcome
 import com.example.core.util.FormatUtils
 import com.wireguard.config.Config as WgConfig
+import org.amnezia.awg.config.Config as AwgConfig
+import com.example.vpnservice.OpenVpn3NativeBridge
+import com.example.vpnservice.SingBoxNativeBridge
 import com.example.vpnservice.XrayNativeBridge
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,7 +56,43 @@ class EngineAndQuotaUnitTest {
     }
 
     @Test
-    fun `XrayNativeBridge reports unavailable cleanly when libv2ray aar is not bundled`() {
+    fun `native AmneziaWG library Config parser validates obfuscation params Jc S1 S2 H1-H4`() {
+        val keyA = Base64.getEncoder().encodeToString(ByteArray(32) { (it + 7).toByte() })
+        val keyB = Base64.getEncoder().encodeToString(ByteArray(32) { (it + 41).toByte() })
+        val awgIni = """
+            [Interface]
+            PrivateKey = $keyA
+            Address = 10.77.0.2/32
+            DNS = 1.1.1.1
+            MTU = 1380
+            Jc = 4
+            Jmin = 40
+            Jmax = 70
+            S1 = 15
+            S2 = 20
+            H1 = 123456
+            H2 = 234567
+            H3 = 345678
+            H4 = 456789
+
+            [Peer]
+            PublicKey = $keyB
+            Endpoint = 198.51.100.20:51821
+            AllowedIPs = 0.0.0.0/0
+            PersistentKeepalive = 25
+        """.trimIndent()
+
+        val awgConfig = AwgConfig.parse(BufferedReader(StringReader(awgIni)))
+        assertNotNull(awgConfig)
+        assertEquals(1, awgConfig.peers.size)
+        assertEquals(4, awgConfig.`interface`.junkPacketCount.orElse(0))
+        assertEquals(1380, awgConfig.`interface`.mtu.orElse(0))
+    }
+
+    @Test
+    fun `bundled native engine classes for sing-box and OpenVPN 3 are present in APK classpath`() {
+        assertTrue(SingBoxNativeBridge.isAvailable())
+        assertTrue(OpenVpn3NativeBridge.isClassPresent())
         assertFalse(XrayNativeBridge.isAvailable())
     }
 
