@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 3D Extruded Deep Crimson Bottom Ledge -->
+    <item android:top="3.5dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <solid android:color="#FF6B0419" />
+        </shape>
+    </item>
+    <!-- Raised Specular Crimson Rim -->
+    <item android:bottom="3.5dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#FFFF94AA"
+                android:endColor="#FF8C0D26" />
+        </shape>
+    </item>
+    <!-- Glossy Crimson Face -->
+    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="4.5dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="13dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#FFFF365E"
+                android:centerColor="#FFE6123B"
+                android:endColor="#FFB8092C" />
+        </shape>
+    </item>
+</layer-list>

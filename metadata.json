@@ -1,0 +1,6 @@
+{
+  "name": "Shadora",
+  "description": "Independent multi-protocol Android VPN client supporting VLESS, VMess, Trojan, Shadowsocks, WireGuard/AmneziaWG, and OpenVPN with secure local Room persistence, subscription manager, and luxury dark RTL interface.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

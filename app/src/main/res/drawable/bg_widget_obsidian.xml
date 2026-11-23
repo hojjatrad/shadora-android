@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Outer subtle metallic glow rim -->
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#FF4D5873"
+                android:centerColor="#FF242A3A"
+                android:endColor="#FF11141E" />
+        </shape>
+    </item>
+    <!-- Inner Obsidian Carbon Surface -->
+    <item android:left="1.5dp" android:top="1.5dp" android:right="1.5dp" android:bottom="1.5dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="18.5dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#FF171B26"
+                android:endColor="#FF0A0C12" />
+        </shape>
+    </item>
+</layer-list>

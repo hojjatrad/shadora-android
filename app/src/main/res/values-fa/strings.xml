@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shadora</string>
+    <string name="vpn_notification_channel_name">تونل وی‌پی‌ان شادورا</string>
+    <string name="vpn_notification_channel_desc">نمایش وضعیت اتصال وی‌پی‌ان و آمار زنده ترافیک</string>
+    <string name="vpn_service_label">وی‌پی‌ان شادورا</string>
+    <string name="action_disconnect">قطع اتصال</string>
+    <string name="vpn_status_connected">متصل</string>
+    <string name="vpn_status_connecting">در حال اتصال…</string>
+    <string name="vpn_status_disconnected">قطع شده</string>
+    <string name="qs_tile_label">وی‌پی‌ان شادورا</string>
+</resources>

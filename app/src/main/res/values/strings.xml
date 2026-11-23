@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shadora</string>
+    <string name="vpn_notification_channel_name">Shadora VPN Tunnel</string>
+    <string name="vpn_notification_channel_desc">Shows active VPN connection status and live traffic metrics.</string>
+    <string name="vpn_service_label">Shadora VPN</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="vpn_status_connected">Connected</string>
+    <string name="vpn_status_connecting">Connecting…</string>
+    <string name="vpn_status_disconnected">Disconnected</string>
+    <string name="qs_tile_label">Shadora VPN</string>
+    <string name="widget_label">Shadora 3D Control</string>
+    <string name="widget_description">One-tap 3D VPN toggle and live server status widget.</string>
+    <string name="widget_no_server">No server selected</string>
+    <string name="widget_action_connect">Quick Connect</string>
+</resources>

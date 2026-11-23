@@ -1,0 +1,80 @@
+name: Build SHADORA APK (Full Native Xray + WireGuard)
+
+on:
+  workflow_dispatch:
+    inputs:
+      libv2ray_version:
+        description: "AndroidLibXrayLite release tag (leave 'latest' for newest official release)"
+        required: false
+        default: "latest"
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout SHADORA repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Download official libv2ray.aar (AndroidLibXrayLite)
+        env:
+          REQ_TAG: ${{ github.event.inputs.libv2ray_version || 'latest' }}
+        run: |
+          set -euo pipefail
+          mkdir -p app/libs
+
+          if [ "$REQ_TAG" = "latest" ]; then
+            API_URL="https://api.github.com/repos/2dust/AndroidLibXrayLite/releases/latest"
+          else
+            API_URL="https://api.github.com/repos/2dust/AndroidLibXrayLite/releases/tags/${REQ_TAG}"
+          fi
+
+          AAR_URL=$(curl -fsSL "$API_URL" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for a in data.get('assets', []):
+              if a.get('name') == 'libv2ray.aar':
+                  print(a['browser_download_url'])
+                  break
+          ")
+
+          if [ -z "$AAR_URL" ]; then
+            echo "ERROR: Could not find libv2ray.aar in AndroidLibXrayLite release."
+            exit 1
+          fi
+
+          echo "Downloading $AAR_URL -> app/libs/libv2ray.aar"
+          curl -fL --retry 3 -o app/libs/libv2ray.aar "$AAR_URL"
+          ls -lh app/libs/libv2ray.aar
+
+      - name: Ensure debug keystore exists
+        run: |
+          if [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Shadora Debug,O=Shadora,C=US"
+          fi
+
+      - name: Build Full Xray + WireGuard APK
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Upload SHADORA Full Xray APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadora-vpn-full-xray-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
