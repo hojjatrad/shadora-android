@@ -1,21 +1,43 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Keep readable stack traces and preserve all JNI / reflection entry points
+-dontobfuscate
+-keepattributes SourceFile,LineNumberTable,Signature,InnerClasses,EnclosingMethod,*Annotation*
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep all SHADORA application classes, Compose screens, ViewModels, Room entities/DAOs, and VPN bridges
+-keep class com.example.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep GoMobile / sing-box (libbox.so) JNI bridge classes and callbacks
+-keep class io.nekohasekai.libbox.** { *; }
+-keep class go.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep AmneziaWG / WireGuard (libam-go.so) JNI bridge classes and tunnel backend
+-keep class org.amnezia.awg.** { *; }
+
+# Keep OpenVPN 3 (libovpn3.so) SWIG JNI bindings
+-keep class net.openvpn.ovpn3.** { *; }
+
+# Keep optional pluggable native cores (Xray libv2ray.aar / Lightway SDK)
+-keep class libv2ray.** { *; }
+-keep class com.expressvpn.lightway.** { *; }
+
+# Keep AndroidX Room generated implementations
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-keepclassmembers class * {
+    @androidx.room.* <methods>;
+}
+
+# Suppress harmless optional-dependency warnings from OkHttp / third-party VPN AARs
+-dontwarn org.bouncycastle.**
+-dontwarn org.conscrypt.**
+-dontwarn org.openjsse.**
+-dontwarn org.codehaus.mojo.animal_sniffer.**
+-dontwarn com.google.android.material.**
+-dontwarn org.koin.**
+-dontwarn androidx.constraintlayout.**
+-dontwarn com.tencent.**
+-dontwarn com.tim.**
+-dontwarn io.nekohasekai.libbox.**
+-dontwarn org.amnezia.awg.**
+-dontwarn net.openvpn.ovpn3.**
+-dontwarn kotlin.annotations.**
+-dontwarn javax.annotation.**

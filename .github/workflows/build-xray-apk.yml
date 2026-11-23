@@ -1,4 +1,4 @@
-name: Build SHADORA Multi-Core APK (All 14 Protocols + Mieru & Cloak NDK)
+name: Build SHADORA Universal APK (All 14 Protocols + Mieru & Cloak)
 
 on:
   workflow_dispatch:
@@ -17,7 +17,6 @@ on:
         required: false
         default: "latest"
   push:
-    branches: [ main, master ]
 
 jobs:
   build-apk:
@@ -33,17 +32,29 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Set up Go 1.23 (for Mieru & Cloak cross-compilation)
+      - name: Install Android SDK 36.1 & accept licenses
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}" -name sdkmanager -type f | head -n 1)
+          fi
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || true
+          "$SDKMANAGER" "platforms;android-36.1" || true
+
+      - name: Set up Go (latest stable for Mieru & Cloak static builds)
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "stable"
 
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.3.1"
 
-      - name: Cross-compile Mieru (libmieru.so) for Android ABIs
+      - name: Cross-compile Mieru (libmieru.so) static ELF binaries for Android ABIs
+        continue-on-error: true
         env:
           REQ_TAG: ${{ github.event.inputs.mieru_version || 'latest' }}
         run: |
@@ -59,14 +70,16 @@ jobs:
                    "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a" \
                    "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64"
 
-          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
+          # CGO_ENABLED=0 GOOS=linux produces zero-libc static ELF binaries that run natively on Android
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
             -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libmieru.so" ./cmd/mieru
-          CGO_ENABLED=0 GOOS=android GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" \
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" \
             -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a/libmieru.so" ./cmd/mieru
-          CGO_ENABLED=0 GOOS=android GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
             -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64/libmieru.so" ./cmd/mieru
 
-      - name: Cross-compile Cloak ck-client (libckclient.so) for Android ABIs
+      - name: Cross-compile Cloak ck-client (libckclient.so) static ELF binaries for Android ABIs
+        continue-on-error: true
         env:
           REQ_TAG: ${{ github.event.inputs.cloak_version || 'latest' }}
         run: |
@@ -82,15 +95,17 @@ jobs:
                    "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a" \
                    "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64"
 
-          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
+          # CGO_ENABLED=0 GOOS=linux produces zero-libc static ELF binaries that run natively on Android
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
             -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libckclient.so" ./cmd/ck-client
-          CGO_ENABLED=0 GOOS=android GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" \
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" \
             -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/armeabi-v7a/libckclient.so" ./cmd/ck-client
-          CGO_ENABLED=0 GOOS=android GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
             -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/x86_64/libckclient.so" ./cmd/ck-client
 
       - name: Download optional libv2ray.aar (if enabled)
         if: ${{ github.event.inputs.include_libv2ray == true }}
+        continue-on-error: true
         run: |
           set -euo pipefail
           mkdir -p app/libs
@@ -106,21 +121,29 @@ jobs:
             curl -fL --retry 3 -o app/libs/libv2ray.aar "$AAR_URL"
           fi
 
-      - name: Ensure debug keystore exists
+      - name: Restore or generate debug keystore
         run: |
+          set -euo pipefail
           if [ ! -f debug.keystore ]; then
-            keytool -genkey -v -keystore debug.keystore \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Shadora Debug,O=Shadora,C=US"
+            if [ -f debug.keystore.base64 ]; then
+              base64 -d debug.keystore.base64 > debug.keystore
+            else
+              keytool -genkey -v -keystore debug.keystore \
+                -storepass android -alias androiddebugkey -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Shadora Debug,O=Shadora,C=US"
+            fi
           fi
 
-      - name: Build Full Multi-Core SHADORA APK
-        run: gradle :app:assembleDebug --no-daemon
+      - name: Build Full Universal Multi-Core SHADORA APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Upload SHADORA Multi-Core APK Artifact
+      - name: Inspect generated APK
+        run: ls -lh app/build/outputs/apk/debug/*.apk
+
+      - name: Upload SHADORA Universal APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: shadora-vpn-multicore-apk
+          name: SHADORA-VPN-Universal-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error

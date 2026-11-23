@@ -16,11 +16,11 @@ android {
     applicationId = "com.aistudio.shadoravpn.kxmzqr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.2"
+    versionCode = 4
+    versionName = "1.2.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    resourceConfigurations += listOf("en", "fa")
+    androidResources.localeFilters += listOf("en", "fa")
 
     ndk {
       // Universal phone compatibility: arm64-v8a (Huawei P20 Pro & modern 64-bit phones),
@@ -57,6 +57,9 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
       signingConfig = signingConfigs.getByName("debugConfig")
