@@ -3,7 +3,6 @@ package com.example
 import com.example.configmanager.ConfigParser
 import com.example.configmanager.ParseOutcome
 import com.example.core.util.FormatUtils
-import com.wireguard.config.Config as WgConfig
 import org.amnezia.awg.config.Config as AwgConfig
 import com.example.vpnservice.OpenVpn3NativeBridge
 import com.example.vpnservice.SingBoxNativeBridge
@@ -49,7 +48,7 @@ class EngineAndQuotaUnitTest {
             PersistentKeepalive = 25
         """.trimIndent()
 
-        val wgConfig = WgConfig.parse(BufferedReader(StringReader(wgIni)))
+        val wgConfig = AwgConfig.parse(BufferedReader(StringReader(wgIni)))
         assertNotNull(wgConfig)
         assertEquals(1, wgConfig.peers.size)
         assertEquals(1420, wgConfig.`interface`.mtu.orElse(0))

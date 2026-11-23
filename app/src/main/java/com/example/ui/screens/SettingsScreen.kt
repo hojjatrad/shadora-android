@@ -28,14 +28,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Apps
-import androidx.compose.material.icons.rounded.BugReport
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.DeleteSweep
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Upload
-import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material.icons.rounded.Lock
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -77,8 +71,7 @@ import com.example.data.local.EngineSettingsEntity
 import com.example.security.SafeLogEntry
 import com.example.ui.InstalledAppItem
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Widgets
+
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.example.security.AppLockManager
@@ -369,7 +362,7 @@ fun SettingsScreen(
                             onLoadInstalledApps()
                             showAppPicker = true
                         },
-                        icon = Icons.Rounded.Apps,
+                        icon = ShadoraIcons.Apps,
                         iconTint = NeonCrimsonGlow,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -464,7 +457,7 @@ fun SettingsScreen(
                             context.startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
                         }
                     },
-                    icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                    icon = ShadoraIcons.OpenInNew,
                     modifier = Modifier.fillMaxWidth()
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
@@ -552,7 +545,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Widgets,
+                        imageVector = ShadoraIcons.Widgets,
                         contentDescription = null,
                         tint = NeonCrimsonGlow,
                         modifier = Modifier.size(20.dp)
@@ -619,7 +612,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(top = 6.dp)
                     ) {
-                        Icon(Icons.Rounded.WarningAmber, contentDescription = null, tint = AmberSignal, modifier = Modifier.size(16.dp))
+                        Icon(ShadoraIcons.WarningAmber, contentDescription = null, tint = AmberSignal, modifier = Modifier.size(16.dp))
                         Text(strings.allowInsecureTlsWarning, style = MaterialTheme.typography.bodySmall, color = AmberSignal)
                     }
                 }
@@ -635,7 +628,7 @@ fun SettingsScreen(
                     Text(strings.connectionHistoryTitle, style = MaterialTheme.typography.titleMedium)
                     if (history.isNotEmpty()) {
                         TextButton(onClick = onClearHistory) {
-                            Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(ShadoraIcons.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.size(4.dp))
                             Text(strings.clearHistory)
                         }
@@ -689,7 +682,7 @@ fun SettingsScreen(
                     Shadora3DOutlinedButton(
                         text = strings.exportBackupCta,
                         onClick = { exportBackupLauncher.launch("shadora-backup.json") },
-                        icon = Icons.Rounded.Upload,
+                        icon = ShadoraIcons.Upload,
                         iconTint = NeonCrimsonGlow,
                         modifier = Modifier
                             .weight(1f)
@@ -698,7 +691,7 @@ fun SettingsScreen(
                     Shadora3DOutlinedButton(
                         text = strings.importBackupCta,
                         onClick = { importBackupLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
-                        icon = Icons.Rounded.Download,
+                        icon = ShadoraIcons.Download,
                         modifier = Modifier
                             .weight(1f)
                             .testTag("import_backup_button")
@@ -711,7 +704,7 @@ fun SettingsScreen(
                         onOpenDiagnosticLogs()
                         showLogsDialog = true
                     },
-                    icon = Icons.Rounded.BugReport,
+                    icon = ShadoraIcons.BugReport,
                     iconTint = NeonCrimsonGlow,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1002,7 +995,7 @@ private fun SafeDiagnosticLogsDialog(
                 enabled = logs.isNotEmpty(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(ShadoraIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.size(6.dp))
                 Text(strings.copyLogsCta, maxLines = 1, softWrap = false)
             }

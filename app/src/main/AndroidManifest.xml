@@ -99,21 +99,6 @@
                 android:value="vpn_client_tunnel" />
         </service>
 
-        <!-- Official WireGuard GoBackend VpnService for native WireGuard tunnels -->
-        <service
-            android:name="com.wireguard.android.backend.GoBackend$VpnService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:permission="android.permission.BIND_VPN_SERVICE"
-            tools:replace="android:exported">
-            <intent-filter>
-                <action android:name="android.net.VpnService" />
-            </intent-filter>
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="wireguard_vpn_tunnel" />
-        </service>
-
         <!-- Native AmneziaWG GoBackend VpnService for obfuscated AmneziaWG tunnels -->
         <service
             android:name="org.amnezia.awg.backend.AbstractBackend$VpnService"

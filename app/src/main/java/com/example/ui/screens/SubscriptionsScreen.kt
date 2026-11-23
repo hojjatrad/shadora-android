@@ -21,12 +21,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CloudSync
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Security
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -138,7 +135,7 @@ fun SubscriptionsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Security,
+                        imageVector = ShadoraIcons.Security,
                         contentDescription = null,
                         tint = EmeraldSignal,
                         modifier = Modifier.size(20.dp)
@@ -172,7 +169,7 @@ fun SubscriptionsScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.CloudSync,
+                            imageVector = ShadoraIcons.CloudSync,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier.size(56.dp)
@@ -324,7 +321,7 @@ private fun SubscriptionCard(
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
-                        imageVector = Icons.Rounded.DeleteOutline,
+                        imageVector = ShadoraIcons.DeleteOutline,
                         contentDescription = strings.delete,
                         tint = MaterialTheme.colorScheme.error
                     )
@@ -406,7 +403,7 @@ private fun SubscriptionCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(16.dp))
+                    Icon(ShadoraIcons.ErrorOutline, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(16.dp))
                     Text(
                         text = sub.lastError,
                         style = MaterialTheme.typography.bodySmall,

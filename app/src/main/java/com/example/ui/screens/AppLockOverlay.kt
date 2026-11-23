@@ -20,9 +20,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Backspace
-import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -275,7 +274,7 @@ fun AppLockOverlay(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.Fingerprint,
+                                    imageVector = ShadoraIcons.Fingerprint,
                                     contentDescription = strings.unlockWithBiometric,
                                     tint = Color.White,
                                     modifier = Modifier.size(26.dp)
@@ -315,7 +314,7 @@ fun AppLockOverlay(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.Backspace,
+                                imageVector = ShadoraIcons.Backspace,
                                 contentDescription = "Backspace",
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(22.dp)

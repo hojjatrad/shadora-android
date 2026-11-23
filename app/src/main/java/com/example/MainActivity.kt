@@ -30,16 +30,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudSync
-import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.rounded.CloudSync
-import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Shield
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -280,9 +275,9 @@ fun ShadoraRootApp(viewModel: ShadoraViewModel) {
     }
 
     val navItems = listOf(
-        NavItemSpec(ShadoraTab.HOME, strings.navHome, Icons.Rounded.Shield, Icons.Outlined.Shield, "nav_home"),
-        NavItemSpec(ShadoraTab.SERVERS, strings.navServers, Icons.Rounded.Dns, Icons.Outlined.Dns, "nav_servers"),
-        NavItemSpec(ShadoraTab.SUBSCRIPTIONS, strings.navSubscriptions, Icons.Rounded.CloudSync, Icons.Outlined.CloudSync, "nav_subscriptions"),
+        NavItemSpec(ShadoraTab.HOME, strings.navHome, ShadoraIcons.Shield, ShadoraIcons.ShieldOutlined, "nav_home"),
+        NavItemSpec(ShadoraTab.SERVERS, strings.navServers, ShadoraIcons.Dns, ShadoraIcons.DnsOutlined, "nav_servers"),
+        NavItemSpec(ShadoraTab.SUBSCRIPTIONS, strings.navSubscriptions, ShadoraIcons.CloudSync, ShadoraIcons.CloudSyncOutlined, "nav_subscriptions"),
         NavItemSpec(ShadoraTab.SETTINGS, strings.navSettings, Icons.Rounded.Settings, Icons.Outlined.Settings, "nav_settings"),
         NavItemSpec(ShadoraTab.ABOUT, strings.navAbout, Icons.Rounded.Info, Icons.Outlined.Info, "nav_about")
     )

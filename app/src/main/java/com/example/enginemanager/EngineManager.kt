@@ -21,9 +21,6 @@ import com.example.vpnservice.ShadoraQuickSettingsTileService
 import com.example.vpnservice.ShadoraVpnService
 import com.example.vpnservice.XrayNativeBridge
 import com.example.widget.ShadoraVpnWidgetProvider
-import com.wireguard.android.backend.GoBackend
-import com.wireguard.android.backend.Tunnel
-import com.wireguard.config.Config as WgConfig
 import org.amnezia.awg.backend.GoBackend as AwgGoBackend
 import org.amnezia.awg.backend.NoopTunnelActionHandler
 import org.amnezia.awg.backend.Tunnel as AwgTunnel
@@ -83,12 +80,6 @@ class EngineManager(
 
     @Volatile
     private var activePlan: EngineLaunchPlan? = null
-
-    @Volatile
-    private var wireGuardBackend: GoBackend? = null
-
-    @Volatile
-    private var activeWireGuardTunnel: ShadoraWgTunnel? = null
 
     @Volatile
     private var amneziaWgBackend: AwgGoBackend? = null
@@ -177,8 +168,7 @@ class EngineManager(
                 val plan = validation.plan
                 activePlan = plan
                 val stageText = when (plan.engineId) {
-                    "wireguard" -> "Initializing libwg-go…"
-                    "amneziawg" -> "Initializing libam-go…"
+                    "wireguard", "amneziawg" -> "Initializing libam-go…"
                     "openvpn" -> "Initializing OpenVPN 3…"
                     else -> "Starting sing-box core…"
                 }
@@ -193,8 +183,7 @@ class EngineManager(
 
                 val isPersian = appSettings.languageCode == "fa"
                 when (plan.engineId) {
-                    "wireguard" -> startWireGuardNative(plan, isPersian)
-                    "amneziawg" -> startAmneziaWgNative(plan, isPersian)
+                    "wireguard", "amneziawg" -> startAmneziaWgNative(plan, isPersian)
                     else -> startShadoraVpnService(plan)
                 }
             }
@@ -205,49 +194,6 @@ class EngineManager(
         failoverJob?.cancel()
         attemptedFailoverIds.clear()
         stopInternal(reason)
-    }
-
-    private suspend fun startWireGuardNative(plan: EngineLaunchPlan, isPersian: Boolean) {
-        try {
-            val wgConfig = WgConfig.parse(BufferedReader(StringReader(plan.compiledConfig)))
-            val backend = wireGuardBackend ?: GoBackend(appContext).also { wireGuardBackend = it }
-            val tunnel = ShadoraWgTunnel("shadora_wg0")
-            activeWireGuardTunnel = tunnel
-            withContext(Dispatchers.IO) {
-                backend.setState(tunnel, Tunnel.State.UP, wgConfig)
-            }
-            attemptedFailoverIds.clear()
-            sessionStartMillis = System.currentTimeMillis()
-            val networkName = detectUnderlyingNetworkName()
-            updateConnectionState(
-                ConnectionState.Connected(
-                    serverId = plan.serverId,
-                    serverName = plan.serverName,
-                    protocol = plan.protocol,
-                    engineId = plan.engineId,
-                    engineModeLabel = if (isPersian) plan.engineModeLabelFa else plan.engineModeLabelEn,
-                    isFullNativeTunnel = true,
-                    startedAtMillis = sessionStartMillis,
-                    localAddress = wgConfig.`interface`.addresses.firstOrNull()?.toString() ?: "10.0.0.2/32",
-                    dnsServers = listOf(plan.primaryDns, plan.secondaryDns).filter { it.isNotBlank() },
-                    underlyingNetwork = networkName
-                )
-            )
-            startTelemetryLoop(TelemetrySource.WIREGUARD)
-        } catch (e: Throwable) {
-            SafeLogger.e(TAG, "WireGuard GoBackend start failed", e)
-            val failedId = plan.serverId
-            activeWireGuardTunnel = null
-            activePlan = null
-            updateConnectionState(
-                ConnectionState.Error(
-                    code = "WG_START_FAILED",
-                    messageFa = "راه‌اندازی موتور بومی WireGuard با خطا مواجه شد: ${SafeLogger.sanitize(e.message.orEmpty())}",
-                    messageEn = "Native WireGuard startup failed: ${SafeLogger.sanitize(e.message.orEmpty())}"
-                )
-            )
-            scheduleAutoFailoverIfEligible(failedId, "WG_START_FAILED")
-        }
     }
 
     private suspend fun startAmneziaWgNative(plan: EngineLaunchPlan, isPersian: Boolean) {
@@ -433,21 +379,7 @@ class EngineManager(
         updateConnectionState(ConnectionState.Disconnecting)
         stopTelemetryAndRecord(reason)
 
-        // Stop WireGuard native tunnel if running
-        val wgTunnel = activeWireGuardTunnel
-        val wgBackend = wireGuardBackend
-        if (wgTunnel != null && wgBackend != null) {
-            try {
-                withContext(Dispatchers.IO) {
-                    wgBackend.setState(wgTunnel, Tunnel.State.DOWN, null)
-                }
-            } catch (e: Throwable) {
-                SafeLogger.w(TAG, "Error stopping WireGuard tunnel: ${e.message}")
-            }
-            activeWireGuardTunnel = null
-        }
-
-        // Stop AmneziaWG native tunnel if running
+        // Stop WireGuard / AmneziaWG native tunnel if running
         val awgTunnel = activeAmneziaWgTunnel
         val awgBackend = amneziaWgBackend
         if (awgTunnel != null && awgBackend != null) {
@@ -477,7 +409,6 @@ class EngineManager(
     }
 
     private enum class TelemetrySource {
-        WIREGUARD,
         AMNEZIA_WG,
         VPN_SERVICE
     }
@@ -501,19 +432,6 @@ class EngineManager(
                 delay(1000L)
                 val elapsed = ((System.currentTimeMillis() - sessionStartMillis) / 1000L).coerceAtLeast(0L)
                 val (totalRx, totalTx, rxSpeed, txSpeed) = when (source) {
-                    TelemetrySource.WIREGUARD -> {
-                        val stats = runCatching {
-                            activeWireGuardTunnel?.let { wireGuardBackend?.getStatistics(it) }
-                        }.getOrNull()
-                        val curRx = stats?.totalRx() ?: 0L
-                        val curTx = stats?.totalTx() ?: 0L
-                        val drx = (curRx - prevRx).coerceAtLeast(0L)
-                        val dtx = (curTx - prevTx).coerceAtLeast(0L)
-                        prevRx = curRx
-                        prevTx = curTx
-                        Quad(curRx, curTx, drx, dtx)
-                    }
-
                     TelemetrySource.AMNEZIA_WG -> {
                         val stats = runCatching {
                             activeAmneziaWgTunnel?.let { amneziaWgBackend?.getStatistics(it) }
@@ -629,13 +547,6 @@ class EngineManager(
     }
 
     private data class Quad(val a: Long, val b: Long, val c: Long, val d: Long)
-
-    private class ShadoraWgTunnel(private val tunnelName: String) : Tunnel {
-        override fun getName(): String = tunnelName
-        override fun onStateChange(newState: Tunnel.State) {
-            SafeLogger.d(TAG, "WireGuard tunnel state -> $newState")
-        }
-    }
 
     private class ShadoraAwgTunnel(
         private val tunnelName: String,

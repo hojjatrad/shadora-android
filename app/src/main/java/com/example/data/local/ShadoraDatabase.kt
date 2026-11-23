@@ -52,6 +52,7 @@ abstract class ShadoraDatabase : RoomDatabase() {
                     "shadora_vpn.db"
                 )
                     .addMigrations(MIGRATION_1_2)
+                    .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                     .build()
                     .also { INSTANCE = it }
             }

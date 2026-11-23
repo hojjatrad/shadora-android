@@ -25,19 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Bolt
-import androidx.compose.material.icons.rounded.CleaningServices
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.NetworkPing
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.StarBorder
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -195,7 +188,7 @@ fun ServersScreen(
                 Shadora3DOutlinedButton(
                     text = if (isPingingAll) strings.testingPing else strings.pingAll,
                     onClick = onPingAll,
-                    icon = Icons.Rounded.NetworkPing,
+                    icon = ShadoraIcons.NetworkPing,
                     enabled = !isPingingAll && servers.isNotEmpty(),
                     loading = isPingingAll,
                     modifier = Modifier
@@ -222,7 +215,7 @@ fun ServersScreen(
                     Shadora3DOutlinedButton(
                         text = if (isSmartConnecting) strings.smartConnecting else strings.smartConnectCta,
                         onClick = onSmartConnect,
-                        icon = Icons.Rounded.Bolt,
+                        icon = ShadoraIcons.Bolt,
                         iconTint = NeonCrimsonGlow,
                         enabled = !isSmartConnecting,
                         loading = isSmartConnecting,
@@ -234,7 +227,7 @@ fun ServersScreen(
                         Shadora3DOutlinedButton(
                             text = "${strings.cleanUnreachableCta} ($unreachableCount)",
                             onClick = { showCleanUnreachableConfirm = true },
-                            icon = Icons.Rounded.CleaningServices,
+                            icon = ShadoraIcons.CleaningServices,
                             iconTint = MaterialTheme.colorScheme.error,
                             modifier = Modifier
                                 .weight(1f)
@@ -308,7 +301,7 @@ fun ServersScreen(
                     label = { Text(strings.favoriteOnly) },
                     leadingIcon = {
                         Icon(
-                            imageVector = if (favoritesOnly) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            imageVector = if (favoritesOnly) Icons.Rounded.Star else ShadoraIcons.StarBorder,
                             contentDescription = strings.favoriteOnly,
                             modifier = Modifier.size(16.dp)
                         )
@@ -372,7 +365,7 @@ fun ServersScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.Public,
+                            imageVector = ShadoraIcons.Public,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier.size(56.dp)
@@ -590,28 +583,28 @@ private fun ServerItemCard(
         ) {
             IconButton(onClick = onToggleFavorite) {
                 Icon(
-                    imageVector = if (server.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    imageVector = if (server.isFavorite) Icons.Rounded.Star else ShadoraIcons.StarBorder,
                     contentDescription = strings.favoriteOnly,
                     tint = if (server.isFavorite) AmberSignal else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onPing) {
                 Icon(
-                    imageVector = Icons.Rounded.NetworkPing,
+                    imageVector = ShadoraIcons.NetworkPing,
                     contentDescription = strings.pingAll,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onInspect) {
                 Icon(
-                    imageVector = Icons.Rounded.Code,
+                    imageVector = ShadoraIcons.Code,
                     contentDescription = strings.inspectConfigTitle,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onRequestDelete) {
                 Icon(
-                    imageVector = Icons.Rounded.DeleteOutline,
+                    imageVector = ShadoraIcons.DeleteOutline,
                     contentDescription = strings.delete,
                     tint = MaterialTheme.colorScheme.error
                 )
@@ -707,7 +700,7 @@ private fun ServerInspectorDialog(
                             .weight(1f)
                             .heightIn(min = 44.dp)
                     ) {
-                        Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(ShadoraIcons.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.size(6.dp))
                         Text(strings.copyConfig, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }

@@ -25,18 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.Bolt
-import androidx.compose.material.icons.rounded.DataUsage
-import androidx.compose.material.icons.rounded.Dns
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.icons.rounded.Radar
-import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material.icons.rounded.SwapHoriz
-import androidx.compose.material.icons.rounded.Wifi
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -187,7 +176,7 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Language,
+                                imageVector = ShadoraIcons.Language,
                                 contentDescription = strings.languageLabel,
                                 tint = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.size(16.dp)
@@ -252,7 +241,7 @@ fun HomeScreen(
                             verticalAlignment = Alignment.Top
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.ErrorOutline,
+                                imageVector = ShadoraIcons.ErrorOutline,
                                 contentDescription = null,
                                 tint = ErrorRed,
                                 modifier = Modifier.size(22.dp)
@@ -317,7 +306,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.Wifi,
+                                    imageVector = ShadoraIcons.Wifi,
                                     contentDescription = strings.networkLabel,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
@@ -335,7 +324,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.Dns,
+                                    imageVector = ShadoraIcons.Dns,
                                     contentDescription = strings.dnsLabel,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
@@ -411,7 +400,7 @@ fun HomeScreen(
                             }
                         }
                         Icon(
-                            imageVector = Icons.Rounded.SwapHoriz,
+                            imageVector = ShadoraIcons.SwapHoriz,
                             contentDescription = strings.selectServerCta,
                             tint = NeonCrimsonGlow
                         )
@@ -428,7 +417,7 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Public,
+                                imageVector = ShadoraIcons.Public,
                                 contentDescription = strings.noServerSelected,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
@@ -461,7 +450,7 @@ fun HomeScreen(
                 Shadora3DOutlinedButton(
                     text = if (isSmartConnecting) strings.smartConnecting else strings.smartConnectCta,
                     onClick = onSmartConnect,
-                    icon = Icons.Rounded.Bolt,
+                    icon = ShadoraIcons.Bolt,
                     iconTint = NeonCrimsonGlow,
                     enabled = hasServers && !isSmartConnecting,
                     loading = isSmartConnecting,
@@ -473,7 +462,7 @@ fun HomeScreen(
                 Shadora3DOutlinedButton(
                     text = if (isCheckingIp) strings.checkingIp else strings.checkPublicIpCta,
                     onClick = onCheckPublicIp,
-                    icon = Icons.Rounded.Radar,
+                    icon = ShadoraIcons.Radar,
                     iconTint = EmeraldSignal,
                     enabled = !isCheckingIp,
                     loading = isCheckingIp,
@@ -538,14 +527,14 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TelemetryTile(
-                    icon = Icons.Rounded.Schedule,
+                    icon = ShadoraIcons.Schedule,
                     label = strings.durationLabel,
                     value = FormatUtils.formatDuration(traffic.elapsedSeconds),
                     accent = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.weight(1f)
                 )
                 TelemetryTile(
-                    icon = Icons.Rounded.DataUsage,
+                    icon = ShadoraIcons.DataUsage,
                     label = strings.totalDataLabel,
                     value = FormatUtils.formatBytes(traffic.totalRxBytes + traffic.totalTxBytes),
                     accent = MaterialTheme.colorScheme.secondary,
@@ -557,14 +546,14 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TelemetryTile(
-                    icon = Icons.Rounded.ArrowDownward,
+                    icon = ShadoraIcons.ArrowDownward,
                     label = strings.downloadLabel,
                     value = FormatUtils.formatSpeed(traffic.rxBytesPerSec),
                     accent = NeonCrimsonGlow,
                     modifier = Modifier.weight(1f)
                 )
                 TelemetryTile(
-                    icon = Icons.Rounded.ArrowUpward,
+                    icon = ShadoraIcons.ArrowUpward,
                     label = strings.uploadLabel,
                     value = FormatUtils.formatSpeed(traffic.txBytesPerSec),
                     accent = EmeraldSignal,

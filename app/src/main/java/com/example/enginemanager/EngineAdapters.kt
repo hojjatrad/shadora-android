@@ -15,33 +15,32 @@ import com.example.vpnservice.MieruNativeBridge
 import com.example.vpnservice.OpenVpn3NativeBridge
 import com.example.vpnservice.SingBoxNativeBridge
 import com.example.vpnservice.XrayNativeBridge
-import com.wireguard.config.Config as WgConfig
 import org.amnezia.awg.config.Config as AwgConfig
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.StringReader
 
 /**
- * Adapter 1: WireGuard Native Engine (backed by official com.wireguard.android:tunnel GoBackend + libwg-go.so).
+ * Adapter 1: WireGuard Native Engine (backed by bundled WireGuard-compatible GoBackend + libam-go.so).
  */
 class WireGuardEngineAdapter : VpnEngineAdapter {
     override val engineId: String = "wireguard"
-    override val engineName: String = "WireGuard Go (libwg-go)"
+    override val engineName: String = "WireGuard Go (libam-go)"
     override val supportedProtocols: Set<VpnProtocol> = setOf(VpnProtocol.WIREGUARD)
-    override val license: String = "Apache-2.0 (wireguard-android)"
+    override val license: String = "Apache-2.0 / GPL-2.0 (WireGuard / AmneziaWG Go)"
 
     override fun inspectCapability(context: Context): EngineDiagnosticInfo {
-        val hasWg = NativeLibraryLocator.hasClass("com.wireguard.android.backend.GoBackend")
+        val hasWg = NativeLibraryLocator.hasClass("org.amnezia.awg.backend.GoBackend")
         return EngineDiagnosticInfo(
             engineId = engineId,
             engineName = engineName,
             protocols = listOf(VpnProtocol.WIREGUARD),
             tier = if (hasWg) EngineSupportTier.NATIVE_BUNDLED else EngineSupportTier.TUN_BRIDGE_READY_FOR_CORE,
             nativeLibraryFound = hasWg,
-            nativeLibraryName = "libwg-go.so",
+            nativeLibraryName = "libam-go.so",
             license = license,
-            noteFa = "موتور رسمی WireGuard Go (libwg-go.so) مستقیماً داخل APK گنجانده شده و آماده برقراری تونل رمزنگاری‌شده واقعی است.",
-            noteEn = "Official WireGuard Go (libwg-go.so) is bundled inside this APK for real encrypted WireGuard tunnels."
+            noteFa = "موتور بومی WireGuard Go (libam-go.so) مستقیماً داخل APK گنجانده شده و آماده برقراری تونل رمزنگاری‌شده واقعی است.",
+            noteEn = "Native WireGuard-compatible Go core (libam-go.so) is bundled inside this APK for real encrypted WireGuard tunnels."
         )
     }
 
@@ -54,7 +53,7 @@ class WireGuardEngineAdapter : VpnEngineAdapter {
     ): EngineValidationResult {
         val patchedIni = buildPatchedWgIni(parsed.rawPayload, appSettings, engineSettings, maxMtu = 1500)
         return try {
-            WgConfig.parse(BufferedReader(StringReader(patchedIni)))
+            AwgConfig.parse(BufferedReader(StringReader(patchedIni)))
             EngineValidationResult.Valid(
                 EngineLaunchPlan(
                     engineId = engineId,

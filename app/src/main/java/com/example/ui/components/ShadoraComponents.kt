@@ -33,9 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.PowerSettingsNew
-import androidx.compose.material.icons.rounded.Shield
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -847,7 +845,7 @@ fun OrbitalConnectButton(
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Icon(
-                imageVector = if (isConnected) Icons.Rounded.Shield else Icons.Rounded.PowerSettingsNew,
+                imageVector = if (isConnected) ShadoraIcons.Shield else ShadoraIcons.PowerSettingsNew,
                 contentDescription = actionHint,
                 tint = when {
                     isConnected -> NeonCrimsonGlow

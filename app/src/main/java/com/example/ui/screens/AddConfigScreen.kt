@@ -31,12 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material.icons.rounded.FileOpen
-import androidx.compose.material.icons.rounded.ImageSearch
-import androidx.compose.material.icons.rounded.QrCodeScanner
-import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Share
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -213,7 +209,7 @@ fun AddConfigScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 ImportMethodTile(
-                    icon = Icons.Rounded.ContentPaste,
+                    icon = ShadoraIcons.ContentPaste,
                     label = strings.importFromClipboard,
                     testTag = "import_clipboard_button",
                     modifier = Modifier.weight(1f),
@@ -227,7 +223,7 @@ fun AddConfigScreen(
                     }
                 )
                 ImportMethodTile(
-                    icon = Icons.Rounded.QrCodeScanner,
+                    icon = ShadoraIcons.QrCodeScanner,
                     label = strings.scanQrCamera,
                     testTag = "import_qr_camera_button",
                     modifier = Modifier.weight(1f),
@@ -246,7 +242,7 @@ fun AddConfigScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 ImportMethodTile(
-                    icon = Icons.Rounded.ImageSearch,
+                    icon = ShadoraIcons.ImageSearch,
                     label = strings.scanQrGallery,
                     testTag = "import_qr_gallery_button",
                     modifier = Modifier.weight(1f),
@@ -257,7 +253,7 @@ fun AddConfigScreen(
                     }
                 )
                 ImportMethodTile(
-                    icon = Icons.Rounded.FileOpen,
+                    icon = ShadoraIcons.FileOpen,
                     label = strings.importFromFile,
                     testTag = "import_file_button",
                     modifier = Modifier.weight(1f),
@@ -327,7 +323,7 @@ fun AddConfigScreen(
                 Shadora3DButton(
                     text = strings.importFromText,
                     onClick = { onImportSubmit(draftText) },
-                    icon = Icons.Rounded.Save,
+                    icon = ShadoraIcons.Save,
                     enabled = draftText.isNotBlank() && !isImporting,
                     loading = isImporting,
                     modifier = Modifier

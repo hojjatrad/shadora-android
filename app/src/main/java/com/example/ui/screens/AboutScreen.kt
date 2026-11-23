@@ -19,8 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.VerifiedUser
+import com.example.ui.theme.ShadoraIcons
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -185,7 +184,7 @@ fun AboutScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Rounded.VerifiedUser, contentDescription = null, tint = EmeraldSignal)
+                    Icon(ShadoraIcons.VerifiedUser, contentDescription = null, tint = EmeraldSignal)
                     Text(strings.securityHighlightsTitle, style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -222,8 +221,7 @@ fun AboutScreen(
                 Spacer(modifier = Modifier.height(6.dp))
                 val licenses = listOf(
                     "sing-box / libbox-android (net.clever-vpn:libbox-android) — GPL-3.0-or-later",
-                    "WireGuard Android Tunnel (com.wireguard.android:tunnel) — Apache-2.0",
-                    "AmneziaWG Android Tunnel (com.zaneschepke:amneziawg-android) — Apache-2.0 / GPL-2.0",
+                    "AmneziaWG / WireGuard Go Tunnel (com.zaneschepke:amneziawg-android) — Apache-2.0 / GPL-2.0",
                     "OpenVPN 3 Core Android (io.github.tim06:vpnprotocols-openvpn) — AGPL-3.0 / Apache-2.0",
                     "ZXing Core (com.google.zxing:core) — Apache-2.0",
                     "OkHttp (com.squareup.okhttp3:okhttp) — Apache-2.0",

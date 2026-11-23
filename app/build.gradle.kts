@@ -16,15 +16,16 @@ android {
     applicationId = "com.aistudio.shadoravpn.kxmzqr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 3
+    versionName = "1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    resourceConfigurations += listOf("en", "fa")
 
     ndk {
-      // arm64-v8a covers modern Android phones; x86_64 covers the AI Studio Streaming Emulator.
-      // Keeps the compressed multi-core APK comfortably under 100 MB for fast preview & USB install.
-      abiFilters += listOf("arm64-v8a", "x86_64")
+      // Universal phone compatibility: arm64-v8a (Huawei P20 Pro & modern 64-bit phones),
+      // armeabi-v7a (32-bit Android phones), and x86_64 (AI Studio Streaming Emulator).
+      abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
     }
   }
 
@@ -73,9 +74,31 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
   packaging {
     jniLibs {
-      // Compress large native Go/C++ VPN cores inside the APK so installs and streaming preview load fast
-      // and native executables (libmieru.so / libckclient.so) are extracted to nativeLibraryDir cleanly.
+      // Compress native Go/C++ VPN cores inside the APK so installs and streaming preview load fast
+      // and native executables (libmieru.so / libckclient.so) extract cleanly to nativeLibraryDir.
       useLegacyPackaging = true
+      val isCiBuild = System.getenv("GITHUB_ACTIONS") == "true"
+      val baseExcludes = mutableSetOf(
+        "**/libhev-socks5-tunnel.so",
+        "**/libmmkv.so",
+        "**/libam.so",
+        "**/libam-quick.so"
+      )
+      if (!isCiBuild) {
+        // Keep AI Studio preview & WebUSB USB-install APK lean (~37 MB instead of 95+ MB) while
+        // preserving 100% of native arm64-v8a VPN cores (Huawei P20 Pro & all 64-bit Android phones)
+        // and keeping AndroidX x86_64/armeabi-v7a libs so the APK installs cleanly on emulator & all devices.
+        // GitHub Actions CI automatically bundles all 3 ABIs with full native cores + Mieru & Cloak.
+        baseExcludes += setOf(
+          "lib/x86_64/libbox.so",
+          "lib/x86_64/libovpn3.so",
+          "lib/x86_64/libam-go.so",
+          "lib/armeabi-v7a/libbox.so",
+          "lib/armeabi-v7a/libovpn3.so",
+          "lib/armeabi-v7a/libam-go.so"
+        )
+      }
+      excludes += baseExcludes
     }
   }
   dependenciesInfo {
@@ -108,7 +131,7 @@ dependencies {
   implementation(libs.androidx.camera.lifecycle)
   implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
-  implementation(libs.androidx.compose.material.icons.extended)
+  // implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
@@ -139,10 +162,15 @@ dependencies {
   // implementation(libs.play.services.location)
   // implementation(libs.retrofit)
   implementation(libs.zxing.core)
-  implementation(libs.wireguard.tunnel)
+  // implementation(libs.wireguard.tunnel) // Unified onto amneziawg-android (libam-go.so) superset
   implementation(libs.amneziawg.android)
   implementation(libs.libbox.android)
-  implementation(libs.vpnprotocols.openvpn)
+  implementation(libs.vpnprotocols.openvpn) {
+    exclude(group = "com.google.android.material")
+    exclude(group = "io.insert-koin")
+    exclude(group = "androidx.constraintlayout")
+    exclude(group = "com.tencent")
+  }
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
